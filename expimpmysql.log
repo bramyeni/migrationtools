@@ -1,0 +1,279 @@
+[1;37;40m2023-11-17 00:56:56,153 [1;32;40mStarting program 17-11-2023 00:56:56 [1;37;40m
+[1;37;40m2023-11-17 00:56:56,153 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 00:56:56,154 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 00:56:56,189 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 00:57:00,913 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 00:57:04,498 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 00:57:43,132 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 00:59:16,020 [1;32;40mStarting program 17-11-2023 00:59:16 [1;37;40m
+[1;37;40m2023-11-17 00:59:16,020 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 00:59:16,021 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 00:59:16,031 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 00:59:22,905 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 00:59:31,443 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:23:10,717 [1;32;40mStarting program 17-11-2023 01:23:10 [1;37;40m
+[1;37;40m2023-11-17 01:23:10,717 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:23:10,717 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:23:10,727 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:23:15,615 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:23:31,495 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:23:32,352 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:26:16,165 [1;32;40mStarting program 17-11-2023 01:26:16 [1;37;40m
+[1;37;40m2023-11-17 01:26:16,166 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:26:16,166 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:26:16,166 [1;32;40m[1;31;40mmain: Error : test_connection() missing 1 required positional argument: 't_ca' line# : 1611 [1;37;40m
+[1;37;40m2023-11-17 01:29:29,943 [1;32;40mStarting program 17-11-2023 01:29:29 [1;37;40m
+[1;37;40m2023-11-17 01:29:29,944 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:29:29,944 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:32:27,074 [1;32;40mStarting program 17-11-2023 01:32:27 [1;37;40m
+[1;37;40m2023-11-17 01:32:27,075 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:32:27,075 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:35:59,007 [1;32;40mStarting program 17-11-2023 01:35:59 [1;37;40m
+[1;37;40m2023-11-17 01:35:59,007 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:35:59,007 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:36:36,867 [1;32;40mStarting program 17-11-2023 01:36:36 [1;37;40m
+[1;37;40m2023-11-17 01:36:36,867 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:36:36,868 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:37:15,095 [1;32;40mStarting program 17-11-2023 01:37:15 [1;37;40m
+[1;37;40m2023-11-17 01:37:15,096 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:37:15,096 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:38:25,825 [1;32;40mStarting program 17-11-2023 01:38:25 [1;37;40m
+[1;37;40m2023-11-17 01:38:25,826 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:38:25,826 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:38:25,837 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:38:27,906 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:38:41,817 [1;32;40mStarting program 17-11-2023 01:38:41 [1;37;40m
+[1;37;40m2023-11-17 01:38:41,818 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:38:41,818 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:38:41,818 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:38:43,692 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:42:21,335 [1;32;40mStarting program 17-11-2023 01:42:21 [1;37;40m
+[1;37;40m2023-11-17 01:42:21,335 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:42:21,335 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:42:21,336 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:42:23,158 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:42:34,916 [1;32;40mStarting program 17-11-2023 01:42:34 [1;37;40m
+[1;37;40m2023-11-17 01:42:34,917 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:42:34,917 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:42:34,927 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:42:37,956 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:42:58,800 [1;32;40mStarting program 17-11-2023 01:42:58 [1;37;40m
+[1;37;40m2023-11-17 01:42:58,800 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:42:58,800 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:42:58,800 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:43:14,150 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:43:15,653 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:43:33,164 [1;32;40mStarting program 17-11-2023 01:43:33 [1;37;40m
+[1;37;40m2023-11-17 01:43:33,165 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:43:33,165 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:43:33,165 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:43:34,839 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:46:27,304 [1;32;40mStarting program 17-11-2023 01:46:27 [1;37;40m
+[1;37;40m2023-11-17 01:46:27,305 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:46:27,305 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:46:27,305 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:46:29,126 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:48:16,048 [1;32;40mStarting program 17-11-2023 01:48:16 [1;37;40m
+[1;37;40m2023-11-17 01:48:16,048 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:48:16,048 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:48:16,049 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:48:20,776 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:49:42,263 [1;32;40mStarting program 17-11-2023 01:49:42 [1;37;40m
+[1;37;40m2023-11-17 01:49:42,263 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:49:42,263 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:49:42,263 [1;32;40m[1;31;40mmain: Error : name 'tca' is not defined line# : 1631 [1;37;40m
+[1;37;40m2023-11-17 01:50:00,906 [1;32;40mStarting program 17-11-2023 01:50:00 [1;37;40m
+[1;37;40m2023-11-17 01:50:00,906 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:50:00,907 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:50:00,907 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:50:07,321 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:51:46,786 [1;32;40mStarting program 17-11-2023 01:51:46 [1;37;40m
+[1;37;40m2023-11-17 01:51:46,786 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:51:46,786 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:51:46,786 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:51:54,475 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:52:57,979 [1;32;40mStarting program 17-11-2023 01:52:57 [1;37;40m
+[1;37;40m2023-11-17 01:52:57,979 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:52:57,979 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:52:57,979 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:53:00,794 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:55:23,503 [1;32;40mStarting program 17-11-2023 01:55:23 [1;37;40m
+[1;37;40m2023-11-17 01:55:23,503 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:55:23,503 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:55:23,503 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:55:27,692 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:55:40,744 [1;32;40mStarting program 17-11-2023 01:55:40 [1;37;40m
+[1;37;40m2023-11-17 01:55:40,744 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:55:40,744 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:55:40,744 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:55:54,157 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:56:04,006 [1;32;40mStarting program 17-11-2023 01:56:04 [1;37;40m
+[1;37;40m2023-11-17 01:56:04,007 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:56:04,007 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:56:04,007 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:56:17,853 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:57:12,248 [1;32;40mStarting program 17-11-2023 01:57:12 [1;37;40m
+[1;37;40m2023-11-17 01:57:12,249 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:57:12,249 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:57:12,249 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:57:17,341 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:57:50,673 [1;32;40mStarting program 17-11-2023 01:57:50 [1;37;40m
+[1;37;40m2023-11-17 01:57:50,673 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:57:50,673 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:57:50,673 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:57:57,122 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:58:19,542 [1;32;40mStarting program 17-11-2023 01:58:19 [1;37;40m
+[1;37;40m2023-11-17 01:58:19,542 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:58:19,542 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:58:19,543 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:58:23,628 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:58:44,464 [1;32;40mStarting program 17-11-2023 01:58:44 [1;37;40m
+[1;37;40m2023-11-17 01:58:44,465 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:58:44,465 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:58:44,465 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:58:48,415 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 01:59:12,063 [1;32;40mStarting program 17-11-2023 01:59:12 [1;37;40m
+[1;37;40m2023-11-17 01:59:12,064 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 01:59:12,064 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 01:59:12,064 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 01:59:13,567 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:00:28,442 [1;32;40mStarting program 17-11-2023 02:00:28 [1;37;40m
+[1;37;40m2023-11-17 02:00:28,443 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:00:28,443 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:00:28,443 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:00:30,856 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:01:17,082 [1;32;40mStarting program 17-11-2023 02:01:17 [1;37;40m
+[1;37;40m2023-11-17 02:01:17,082 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:01:17,082 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:07:29,778 [1;32;40mStarting program 17-11-2023 02:07:29 [1;37;40m
+[1;37;40m2023-11-17 02:07:29,778 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:07:29,778 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:07:29,779 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:07:36,079 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:07:44,194 [1;32;40mStarting program 17-11-2023 02:07:44 [1;37;40m
+[1;37;40m2023-11-17 02:07:44,194 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:07:44,195 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:07:44,195 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:07:46,928 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:08:05,922 [1;32;40mStarting program 17-11-2023 02:08:05 [1;37;40m
+[1;37;40m2023-11-17 02:08:05,923 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:08:05,923 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:08:05,923 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:08:09,130 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:08:46,200 [1;32;40mStarting program 17-11-2023 02:08:46 [1;37;40m
+[1;37;40m2023-11-17 02:08:46,201 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:08:46,201 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:08:46,201 [1;32;40m[1;31;40mmain: Error : '{t_ca}' line# : 1635 [1;37;40m
+[1;37;40m2023-11-17 02:09:10,282 [1;32;40mStarting program 17-11-2023 02:09:10 [1;37;40m
+[1;37;40m2023-11-17 02:09:10,283 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:09:10,283 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:09:10,293 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:09:12,893 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:09:37,712 [1;32;40mStarting program 17-11-2023 02:09:37 [1;37;40m
+[1;37;40m2023-11-17 02:09:37,712 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:09:37,713 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:09:37,713 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:09:40,049 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:11:18,587 [1;32;40mStarting program 17-11-2023 02:11:18 [1;37;40m
+[1;37;40m2023-11-17 02:11:18,588 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:11:18,588 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:11:18,588 [1;32;40m[1;31;40mmain: Error : name 'tca' is not defined line# : 1635 [1;37;40m
+[1;37;40m2023-11-17 02:11:26,853 [1;32;40mStarting program 17-11-2023 02:11:26 [1;37;40m
+[1;37;40m2023-11-17 02:11:26,854 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:11:26,854 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:11:26,854 [1;32;40m[1;31;40mmain: Error : '' line# : 1635 [1;37;40m
+[1;37;40m2023-11-17 02:11:41,968 [1;32;40mStarting program 17-11-2023 02:11:41 [1;37;40m
+[1;37;40m2023-11-17 02:11:41,968 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:11:41,968 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:11:41,968 [1;32;40m[1;31;40mmain: Error : '' line# : 1635 [1;37;40m
+[1;37;40m2023-11-17 02:12:19,853 [1;32;40mStarting program 17-11-2023 02:12:19 [1;37;40m
+[1;37;40m2023-11-17 02:12:19,854 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:12:19,854 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:12:19,854 [1;32;40m[1;31;40mmain: Error : '' line# : 1636 [1;37;40m
+[1;37;40m2023-11-17 02:12:41,819 [1;32;40mStarting program 17-11-2023 02:12:41 [1;37;40m
+[1;37;40m2023-11-17 02:12:41,819 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:12:41,819 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:14:20,261 [1;32;40mStarting program 17-11-2023 02:14:20 [1;37;40m
+[1;37;40m2023-11-17 02:14:20,261 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:14:20,261 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:14:20,271 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:14:23,399 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:14:39,484 [1;32;40mStarting program 17-11-2023 02:14:39 [1;37;40m
+[1;37;40m2023-11-17 02:14:39,485 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:14:39,485 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:14:39,487 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:14:43,590 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:15:46,681 [1;32;40mStarting program 17-11-2023 02:15:46 [1;37;40m
+[1;37;40m2023-11-17 02:15:46,682 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:15:46,682 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:15:46,684 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:15:49,678 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:16:06,699 [1;32;40mStarting program 17-11-2023 02:16:06 [1;37;40m
+[1;37;40m2023-11-17 02:16:06,699 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:16:06,699 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:16:06,701 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:16:08,551 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:16:25,916 [1;32;40mStarting program 17-11-2023 02:16:25 [1;37;40m
+[1;37;40m2023-11-17 02:16:25,917 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:16:25,917 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:16:25,919 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:16:31,784 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:16:53,619 [1;32;40mStarting program 17-11-2023 02:16:53 [1;37;40m
+[1;37;40m2023-11-17 02:16:53,620 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:16:53,620 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:16:53,621 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:16:56,436 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:18:07,492 [1;32;40mStarting program 17-11-2023 02:18:07 [1;37;40m
+[1;37;40m2023-11-17 02:18:07,493 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:18:07,493 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:18:07,513 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:18:09,830 [1;32;40mCtrl-C has been pressed! [1;37;40m
+[1;37;40m2023-11-17 02:18:15,752 [1;32;40mStarting program 17-11-2023 02:18:15 [1;37;40m
+[1;37;40m2023-11-17 02:18:15,753 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:18:15,753 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:18:15,772 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:18:18,958 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:18:22,291 [1;32;40mPassword seems to be wrong.. please retype the correct one! [1;37;40m
+[1;37;40m2023-11-17 02:18:27,501 [1;32;40mGathering character set information from database flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:18:27,501 [1;32;40m[1;31;40mgather_database_charset: Error : cafile should be a valid filesystem path line# : 1334 [1;37;40m
+[1;37;40m2023-11-17 02:18:27,501 [1;32;40m[1;31;40mmain: Error : local variable 'lconn' referenced before assignment line# : 1614 [1;37;40m
+[1;37;40m2023-11-17 02:19:13,359 [1;32;40mStarting program 17-11-2023 02:19:13 [1;37;40m
+[1;37;40m2023-11-17 02:19:13,360 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:19:13,360 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:19:13,394 [1;32;40mGathering character set information from database flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:19:13,448 [1;32;40mDatabase flexibleserverdb character set is : utf8 [1;37;40m
+[1;37;40m2023-11-17 02:19:13,463 [1;32;40mExporting Data from Database: flexibleserverdb Start Date:17-11-2023 02:19:13 [1;37;40m
+[1;37;40m2023-11-17 02:19:13,469 [1;32;40m[1;31;40mexport_data: Error : (3159, 'Connections using insecure transport are prohibited while --require_secure_transport=ON.') line# : 1460 [1;37;40m
+[1;37;40m2023-11-17 02:20:05,201 [1;32;40mStarting program 17-11-2023 02:20:05 [1;37;40m
+[1;37;40m2023-11-17 02:20:05,202 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:20:05,202 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:20:05,239 [1;32;40mGathering character set information from database flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:20:05,257 [1;32;40mDatabase flexibleserverdb character set is : utf8 [1;37;40m
+[1;37;40m2023-11-17 02:20:05,271 [1;32;40mExporting Data from Database: flexibleserverdb Start Date:17-11-2023 02:20:05 [1;37;40m
+[1;37;40m2023-11-17 02:20:05,283 [1;32;40mGenerating create sequence script... [1;37;40m
+[1;37;40m2023-11-17 02:20:05,303 [1;32;40mGenerating create trigger script... [1;37;40m
+[1;37;40m2023-11-17 02:20:05,306 [1;32;40mGenerating create view script... [1;37;40m
+[1;37;40m2023-11-17 02:20:05,307 [1;32;40mGenerating create procedure and function script... [1;37;40m
+[1;37;40m2023-11-17 02:20:05,529 [1;32;40m[1;37;40mDatabase export connections are closed [1;37;40m
+[1;37;40m2023-11-17 02:20:29,492 [1;32;40mStarting program 17-11-2023 02:20:29 [1;37;40m
+[1;37;40m2023-11-17 02:20:29,493 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:20:29,493 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:20:29,525 [1;32;40mGathering character set information from database flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:20:29,544 [1;32;40mDatabase flexibleserverdb character set is : utf8 [1;37;40m
+[1;37;40m2023-11-17 02:20:29,557 [1;32;40mExporting Data from Database: flexibleserverdb Start Date:17-11-2023 02:20:29 [1;37;40m
+[1;37;40m2023-11-17 02:20:29,573 [1;32;40mGenerating create sequence script... [1;37;40m
+[1;37;40m2023-11-17 02:20:29,575 [1;32;40mGenerating create trigger script... [1;37;40m
+[1;37;40m2023-11-17 02:20:29,577 [1;32;40mGenerating create view script... [1;37;40m
+[1;37;40m2023-11-17 02:20:29,579 [1;32;40mGenerating create procedure and function script... [1;37;40m
+[1;37;40m2023-11-17 02:20:29,642 [1;32;40m[1;37;40mDatabase export connections are closed [1;37;40m
+[1;37;40m2023-11-17 02:30:41,988 [1;32;40mStarting program 17-11-2023 02:30:41 [1;37;40m
+[1;37;40m2023-11-17 02:30:41,988 [1;32;40mExporting data to a client...... [1;37;40m
+[1;37;40m2023-11-17 02:30:41,988 [1;32;40mGathering target database character set information from server: 10.13.3.116:3306 database: flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:30:42,023 [1;32;40mGathering character set information from database flexibleserverdb [1;37;40m
+[1;37;40m2023-11-17 02:30:42,069 [1;32;40mDatabase flexibleserverdb character set is : utf8 [1;37;40m
+[1;37;40m2023-11-17 02:30:42,085 [1;32;40mExporting Data from Database: flexibleserverdb Start Date:17-11-2023 02:30:42 [1;37;40m
+[1;37;40m2023-11-17 02:30:42,100 [1;32;40mGenerating create sequence script... [1;37;40m
+[1;37;40m2023-11-17 02:30:42,103 [1;32;40mGenerating create trigger script... [1;37;40m
+[1;37;40m2023-11-17 02:30:42,105 [1;32;40mGenerating create view script... [1;37;40m
+[1;37;40m2023-11-17 02:30:42,106 [1;32;40mGenerating create procedure and function script... [1;37;40m
+[1;37;40m2023-11-17 02:30:42,149 [1;32;40m[1;37;40mDatabase export connections are closed [1;37;40m

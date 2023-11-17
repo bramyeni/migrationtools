@@ -594,7 +594,7 @@ def insert_data(tablename):
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
  
 #insert data from file
-def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset,impdatabase,improwchunk,dirname):
+def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset,impdatabase,improwchunk,dirname,impca):
     fflag=None
     insconnection=None
     mprocessid=(mproc.current_process()).name
@@ -614,6 +614,7 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
                                       host=impserver,
                                       port=int(impport),
                                       charset=impcharset,
+                                      ssl_ca=impca,
                                       database=impdatabase,local_infile=True)
 
        curinsdata=insconnection.cursor()
@@ -709,7 +710,7 @@ def slice_file(dirname,filename):
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error :"+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
 
 #verify data
-def verify_data(tablefile,impuser,imppass,impserver,impport,impcharset,impdatabase,improwchunk,dirname):
+def verify_data(tablefile,impuser,imppass,impserver,impport,impcharset,impdatabase,improwchunk,dirname,impca):
     if (re.search(".*\.1$",tablefile)==None or tablefile.find(".")==-1):
        return
     tablename=tablefile.split(".")[0:1][0]
@@ -722,6 +723,7 @@ def verify_data(tablefile,impuser,imppass,impserver,impport,impcharset,impdataba
                                       host=impserver,
                                       port=int(impport),
                                       charset=impcharset,
+                                      ssl_ca=impca,
                                       database=impdatabase)
 
        logging.info(mprocessid+" Counting no of rows from table \033[1;34;40m"+tablename)
@@ -776,12 +778,13 @@ def usage():
     print("   -a, --all-info          gather All information from information_schema")
     print("   -l, --log=              INFO|DEBUG|WARNING|ERROR|CRITICAL\n")
 
-def test_connection(t_user,t_pass,t_server,t_port,t_database):
+def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
     try:
        dbconnection = pymysql.connect(user=t_user,
                                         password=t_pass,
                                         host=t_server,
                                         port=int(t_port),
+                                        ssl_ca=t_ca,
                                         database=t_database)
 
        dbconnection.close()
@@ -810,6 +813,7 @@ def import_data():
     improwchunk = read_config('import','rowchunk')
     impparallel = int(read_config('import','parallel'))
     imptables=read_config('import','tables')
+    impca = read_config('import','sslca')
 
     gicharset=gather_database_charset(impserver,impport,impdatabase,"TARGET")
     logging.info("Database "+impdatabase+" character set is : "+gicharset)
@@ -831,6 +835,7 @@ def import_data():
                                         host=impserver,
                                         port=int(impport),
                                         charset=gicharset,
+                                        ssl_ca=impca,
                                         database=impdatabase)
 
     except (Exception,pymysql.Error) as error:
@@ -990,14 +995,14 @@ def import_data():
        impconnection.close()
 
        with mproc.Pool(processes=impparallel) as importpool:
-          multiple_results = [importpool.apply_async(insert_data_from_file, (tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,expdatabase)) for tbldata in listofdata]
+          multiple_results = [importpool.apply_async(insert_data_from_file, (tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,expdatabase,impca)) for tbldata in listofdata]
           importpool.close()
           importpool.join()
           print([res.get(timeout=1000000) for res in multiple_results])
        
        
        with mproc.Pool(processes=impparallel) as importpool:
-          multiple_results = [importpool.apply_async(verify_data, (tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,expdatabase)) for tbldata in listofdata]
+          multiple_results = [importpool.apply_async(verify_data, (tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,expdatabase,impca)) for tbldata in listofdata]
           importpool.close()
           importpool.join()
           print([res.get(timeout=10000) for res in multiple_results])
@@ -1007,6 +1012,7 @@ def import_data():
                                         host=impserver,
                                         port=int(impport),
                                         charset=gicharset,
+                                        ssl_ca=impca,
                                         database=impdatabase)
        #recreate_fkeys()
        #create_sequences()
@@ -1020,13 +1026,14 @@ def import_data():
           impconnection.close()
           logging.error("\033[1;37;40mDatabase import connections are closed")
 
-def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdatabase):
+def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdatabase,expca):
     try:
        spconnection=pymysql.connect(user=expuser,
                         password=exppass,
                         host=expserver,
                         port=int(expport),
                         charset=expcharset,
+                        ssl_ca=expca,
                         database=expdatabase)
 
        mprocessid=(mproc.current_process()).name
@@ -1056,7 +1063,7 @@ def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdat
           spconnection.close()
      
 #procedure to spool data unbuffered to a file in parallel
-def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,expdatabase,exprowchunk):
+def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,expdatabase,exprowchunk,expca):
     global totalproc
     try:
        spconnection=pymysql.connect(user=expuser,
@@ -1065,6 +1072,7 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
                         port=int(expport),
                         charset=expcharset,
                         database=expdatabase,
+                        ssl_ca=expca,
                         cursorclass=pymysql.cursors.SSCursor,)
 
        spcursor=spconnection.cursor()
@@ -1128,13 +1136,14 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
         
 
 #procedure to spool data to a file in parallel
-def spool_data(tbldata,expuser,exppass,expserver,expport,expcharset,expdatabase,exprowchunk,expmaxrowsperfile):
+def spool_data(tbldata,expuser,exppass,expserver,expport,expcharset,expdatabase,exprowchunk,expmaxrowsperfile,expca):
     global totalproc
     try:
        spconnection=pymysql.connect(user=expuser,
                         password=exppass,
                         host=expserver,
                         port=int(expport),
+                        ssl_ca=expca,
                         charset=expcharset,
                         database=expdatabase)
    
@@ -1232,6 +1241,7 @@ def get_all_info():
     aserver = read_config('export','servername')
     aport = read_config('export','port')
     adatabase = read_config('export','database')
+    aca = read_config('export','sslca')
     auser=input('Enter admin username :')
     apass=getpass.getpass('Enter Password for '+auser+' :')
    
@@ -1246,7 +1256,7 @@ def get_all_info():
        logging.error("\033[1;31;40mError occured :"+str(logerr))
        sys.exit(2)
 
-    if test_connection(auser,apass,aserver,aport,adatabase)==1:
+    if test_connection(auser,apass,aserver,aport,adatabase,aca)==1:
        logging.error("\033[1;31;40mSorry, user: \033[1;36;40m"+auser+"\033[1;31;40m not available or password was wrong!!")
        sys.exit(2)
 
@@ -1259,6 +1269,7 @@ def get_all_info():
                                 host=aserver,
                                 port=int(aport),
                                 charset=gecharset,
+                                ssl_ca=aca,
                                 database="information_schema")
 
        acursor=aconn.cursor()
@@ -1284,11 +1295,12 @@ def gather_database_charset(lserver,lport,ldatabase,targetdb,**kwargs):
        logging.info("Gathering source database character set information from server: "+lserver+":"+lport+" database: "+ldatabase)
        luser = read_config('import','username')
        lpass = read_config('import','password')
+       lca = read_config('import','sslca')
        if (lpass==''):
           lpass=' '
        lpass=decode_password(lpass)
 
-       while test_connection(luser,lpass,lserver,lport,ldatabase)==1:
+       while test_connection(luser,lpass,lserver,lport,ldatabase,lca)==1:
           logging.info("Password seems to be wrong.. please retype the correct one!")
           lpass=getpass.getpass("Enter Password for "+luser+" :")
           obfuscatedpass=encode_password(lpass)
@@ -1304,11 +1316,12 @@ def gather_database_charset(lserver,lport,ldatabase,targetdb,**kwargs):
        
        luser = read_config('export','username')
        lpass = read_config('export','password')
+       lca = read_config('export','sslca')
        if (lpass==''):
           lpass=' '
        lpass=decode_password(lpass)
 
-       while test_connection(luser,lpass,lserver,lport,ldatabase)==1:
+       while test_connection(luser,lpass,lserver,lport,ldatabase,lca)==1:
           logging.info("Password seems to be wrong.. please retype the correct one!")
           lpass=getpass.getpass("Enter Password for "+luser+" :")
           obfuscatedpass=encode_password(lpass)
@@ -1316,7 +1329,7 @@ def gather_database_charset(lserver,lport,ldatabase,targetdb,**kwargs):
        with open(configfile, 'w') as cfgfile:
           config.write(cfgfile)
 
-    if test_connection(luser,lpass,lserver,lport,ldatabase)==1:
+    if test_connection(luser,lpass,lserver,lport,ldatabase,lca)==1:
        logging.error("\033[1;31;40mSorry, user: \033[1;36;40m"+luser+"\033[1;31;40m not available or password was wrong!!, please check your config file :"+configfile)
        sys.exit(2)
 
@@ -1326,6 +1339,7 @@ def gather_database_charset(lserver,lport,ldatabase,targetdb,**kwargs):
                                 password=lpass,
                                 host=lserver,
                                 port=int(lport),
+                                ssl_ca=lca,
                                 database=ldatabase)
 
        lcursor=lconn.cursor()
@@ -1350,6 +1364,7 @@ def analyze_source_database():
     aserver = read_config('export','servername')
     aport = read_config('export','port')
     adatabase = read_config('export','database')
+    aca = read_config('export','sslca')
 
     #Create directory to spool all export files
     try:
@@ -1365,7 +1380,7 @@ def analyze_source_database():
     auser=input('Enter admin username :')
     apass=getpass.getpass('Enter Password for '+auser+' :')
    
-    if test_connection(auser,apass,aserver,aport,adatabase)==1:
+    if test_connection(auser,apass,aserver,aport,adatabase,aca)==1:
        logging.error("\033[1;31;40mSorry, user: \033[1;36;40m"+auser+"\033[1;31;40m not available or password was wrong!!")
        sys.exit(2)
 
@@ -1377,6 +1392,7 @@ def analyze_source_database():
                                 password=apass,
                                 host=aserver,
                                 port=int(aport),
+                                ssl_ca=aca,
                                 charset=gecharset,
                                 database=adatabase)
 
@@ -1428,11 +1444,12 @@ def export_data(**kwargs):
     expparallel = int(read_config('export','parallel'))
     expmaxrowsperfile = int(read_config('export','maxrowsperfile'))
     exppass = read_config('export','password')
+    expca = read_config('export','sslca')
     if (exppass==''):
        exppass=' ';
     exppass=decode_password(exppass)
 
-    while test_connection(expuser,exppass,expserver,expport,expdatabase)==1:
+    while test_connection(expuser,exppass,expserver,expport,expdatabase,expca)==1:
        exppass=getpass.getpass('Enter Password for '+expuser+' :')
     obfuscatedpass=encode_password(exppass)
     config.set("export","password",obfuscatedpass)
@@ -1449,6 +1466,7 @@ def export_data(**kwargs):
                                         host=expserver,
                                         port=int(expport),
                                         charset=gecharset,
+                                        ssl_ca=expca,
                                         database=expdatabase)
 
     except (Exception,pymysql.Error) as error:
@@ -1505,12 +1523,12 @@ def export_data(**kwargs):
 
        with mproc.Pool(processes=expparallel) as exportpool:
           if (kwargs.get('spool',None)=='toclient' or kwargs.get('spool',None)==None):
-             multiple_results = [exportpool.apply_async(spool_data_unbuffered, (tbldata,expuser,exppass,expserver,expport,gecharset,expdatabase,exprowchunk)) for tbldata in listoftables]
+             multiple_results = [exportpool.apply_async(spool_data_unbuffered, (tbldata,expuser,exppass,expserver,expport,gecharset,expdatabase,exprowchunk,expca)) for tbldata in listoftables]
              exportpool.close()
              exportpool.join()
              print([res.get(timeout=1000) for res in multiple_results])
           elif (kwargs.get('spool',None)=='toserver'):
-             multiple_results = [exportpool.apply_async(spool_table_fast, (tbldata,expuser,exppass,expserver,expport,gecharset,expdatabase)) for tbldata in listoftables]
+             multiple_results = [exportpool.apply_async(spool_table_fast, (tbldata,expuser,exppass,expserver,expport,gecharset,expdatabase,expca)) for tbldata in listoftables]
              exportpool.close()
              exportpool.join()
              print([res.get(timeout=1000) for res in multiple_results])
