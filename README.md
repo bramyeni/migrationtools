@@ -96,26 +96,39 @@ sample config file:
 
 <pre>
 cat mysqlconfig.ini
+[general]
+separator = 1e
+quote = 1f
+escape = 1d
+endofline = 2323
+crlf = 0a
+
 [export]
-servername = 192.168.0.111
+servername = 192.16.10.22
 port = 3306
-username = admin
-database = mydb
+username = wiki
+database = zabbix
 rowchunk = 1000000
 maxrowsperfile = 1000000
 tables = all
 parallel = 5
-password = 59g2>1y(
+sslca = /etc/mysql/CA.crt
+password = sn+s}&8l
+mysqlparam1 = net_read_timeout:360
+mysqlparam2 = connect_timeout:360
+mysqlparam3 = max_allowed_packet:256222222
 
 [import]
-servername = 192.168.0.111
+servername = 100.130.13.117
 port = 3306
-username = admin
-database = mydb2
-parallel = 2
-rowchunk = 1000000
+username = sqladmin
+database = wiki
+parallel = 12
+locktimeout = 1000
+rowchunk = 100000
 tables = all
-password = 59g2>1y(
+sslca = /root/ca-cert.pem
+password = sn+s}&8l4+1q`z<^
 </pre>
 
 NOTE: initially password need to be left blank, so it will prompt for password then it will be encrypted and stored into the above config file
