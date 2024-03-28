@@ -4,9 +4,12 @@ Scripts to Perform Database Migrations built by me using Python3
 # Features
 - multiprocessing to perform simultaneous exports and imports
 - Slice into chunks to perform multiplple inserts per table
-- Compressed using mgzip to perform multiple compression using all processors that are available
+- Compressed using pgzip to perform multiple compression using all processors that are available
 - Encrypted password is stored into config file to reduce typing when performing exports and imports
 - Spool all original DDLs (source DB) and converted DDLs (target DB) so it will be easy to debug or to be reverted back
+- Configurable separator, end of line, quote and escape
+- Export all databases within the same instance or choose multiple databases separated by comma
+- Export all tables within database (apply to one database only) or choose multiple tables separated by comma
 
 # Source db and Target db
 At present my script will incorporate only few DB migrations and only OFFLINE migration for now
@@ -86,8 +89,10 @@ General options:
    -i, --import            import mode
    -s, --script            generate scripts
    -d, --dbinfo            gather DB information
+   -t, --db-list=          all|list|db1,db2,dbN
    -a, --all-info          gather All information from information_schema
    -l, --log=              INFO|DEBUG|WARNING|ERROR|CRITICAL
+   
 </pre>
 
 ## Pre-requisites
@@ -97,38 +102,60 @@ sample config file:
 <pre>
 cat mysqlconfig.ini
 [general]
-separator = 1e
+;separator can be a string
+separator = 020304
+;quote must be character only
 quote = 1f
+;escape must be character only
 escape = 1d
+;endofline can be a string
 endofline = 2323
 crlf = 0a
 
 [export]
-servername = 192.16.10.22
+;severname can be IP Address or FQDN
+servername = 192.168.0.221
+;port number that is used by MySQL/MariaDB
 port = 3306
-username = wiki
-database = zabbix
+;username must have permission to read the database(s) that is/are listed here
+username = bram
+;export database can be "all" OR list of tables with comma separated
+database = opennebula,pos
+;number of rows per file
 rowchunk = 1000000
 maxrowsperfile = 1000000
+;tables can be "all" OR list of tables with comma separated
 tables = all
+;set number of threads
 parallel = 5
+;CA certificate for connection encryption in transit
 sslca = /etc/mysql/CA.crt
-password = sn+s}&8l
+password = XXXXXXX
+convertcharset = latin1:utf8mb4
+;mysqlparamN (sequence number)
 mysqlparam1 = net_read_timeout:360
 mysqlparam2 = connect_timeout:360
 mysqlparam3 = max_allowed_packet:256222222
 
 [import]
-servername = 100.130.13.117
+;severname can be IP Address or FQDN
+servername = 192.168.0.221
+;port number that is used by MySQL/MariaDB
 port = 3306
-username = sqladmin
-database = wiki
+;username must have permission to write into the database that is listed here
+username = bram
+;import database must be one database
+database = opennebula2
+;set number of threads
 parallel = 12
 locktimeout = 1000
+;number of rows per file
 rowchunk = 100000
-tables = all
-sslca = /root/ca-cert.pem
-password = sn+s}&8l4+1q`z<^
+;tables can be list of tables with comma separated
+tables = FLOORS,RESOURCES
+;CA certificate for connection encryption in transit
+sslca =
+password = bla&df7
 </pre>
 
 NOTE: initially password need to be left blank, so it will prompt for password then it will be encrypted and stored into the above config file
