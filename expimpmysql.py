@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 557 2024-03-20 00:44:44Z bpahlawa $
+# $Id: expimpmysql.py 560 2024-03-28 09:27:30Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-03-20 08:44:44 +0800 (Wed, 20 Mar 2024) $
-# $Revision: 557 $
+# $Date: 2024-03-28 17:27:30 +0800 (Thu, 28 Mar 2024) $
+# $Revision: 560 $
 
 import re
 from string import *
@@ -29,6 +29,7 @@ import shutil
 import pymysql
 import configparser
 import csv
+import traceback
 
 from itertools import (takewhile,repeat)
 import multiprocessing as mproc
@@ -86,8 +87,20 @@ show global variables like 'have_%'
 "SELECT user, host FROM mysql.user WHERE user = 'root'"
 "SELECT CONCAT(user,'@', host) AS account, pass FROM (SELECT user1.user, user1.host, user2.user AS u2, user2.host AS h2, left(user1.password,5) as pass FROM mysql.user AS user1 INNER JOIN mysql.user AS user2 ON (user1.password = user2.password) WHERE user1.user != user2.user AND user1.password != '') users GROUP BY CONCAT(user,'@',host) ORDER BY pass"
 "SELECT table_schema db,ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) Size_MB FROM information_schema.TABLES GROUP BY table_schema"
+"SELECT COUNT(*) as '#TABLES',CONCAT(ROUND(sum(data_length)/(1024*1024*1024),2),'G') DATA,CONCAT(ROUND(sum(index_length)/(1024*1024*1024),2),'G') INDEXES,
+CONCAT(sum(ROUND(( data_length + index_length ) / ( 1024 * 1024 * 1024 ), 2)), 'G') 'TOTAL SIZE', ENGINE FROM information_schema.TABLES
+WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys') GROUP BY engine"
+"SELECT DATA_TYPE,count(*) TOT FROM information_schema.COLUMNS  WHERE TABLE_SCHEMA NOT IN ('mysql', 'sys', 'information_schema', 'performance_schema') GROUP BY 1"
+"SELECT COUNT(*), TABLE_TYPE FROM information_schema.TABLES GROUP BY table_type"
+"WITH seqlist (a) AS (SELECT CONCAT('%`',TABLE_SCHEMA,'`.`', TABLE_NAME,'`%') a FROM information_schema.TABLES WHERE table_type='SEQUENCE') SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS JOIN seqlist WHERE COLUMN_DEFAULT LIKE seqlist.a"
+"SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.TABLES WHERE TABLE_TYPE='system versioned'"
+"SELECT TABLE_SCHEMA, table_name, column_name, generation_expression FROM INFORMATION_SCHEMA.COLUMNS where generation_expression is not null"
+"SELECT * from information_schema.partitions where partition_name is not null"
+"SELECT * from information_schema.geometry_columns"
+"SELECT distinct table_schema,engine,version,row_format,table_collation,checksum,temporary from information_schema.tables where table_schema not in ('information_schema','sys','mysql','performance_schema')"
 """
-
+#sep for OHTER_INFORMATION
+sOI=" "
 #global datetime
 dtnow=None
 #Character set and collation of source database
@@ -110,6 +123,8 @@ cranalyzedbfilename='analyzedb-mysql'
 crallinfo='allinfo'
 #create proc and func script's filename
 crprocfuncfilename='crprocsfuncs-mysql.sql'
+#spool out database info
+crdbinfo="dbinfo"
 
 #create table file handle
 crtblfile=None
@@ -146,58 +161,13 @@ expdatabase=None
 afile=None
 
 
-sqlanalyzetableinfo="""
-select table_schema,
-       table_name,
-       table_type,
-       ROW_FORMAT,
-       TABLE_ROWS,
-       AVG_ROW_LENGTH,
-       DATA_LENGTH,
-       INDEX_LENGTH 
-from information_schema.tables 
-where table_schema = '{0}'
-order by 2,1,4,3;
-"""
-
-sqlanalyzeprocfuncinfo="""
-select
-SPECIFIC_NAME,
-ROUTINE_CATALOG,
-ROUTINE_NAME,
-ROUTINE_TYPE,
-DATA_TYPE,
-CHARACTER_MAXIMUM_LENGTH,
-CHARACTER_OCTET_LENGTH,
-NUMERIC_PRECISION,
-NUMERIC_SCALE,
-DATETIME_PRECISION,
-CHARACTER_SET_NAME,
-COLLATION_NAME,
-DTD_IDENTIFIER,
-ROUTINE_BODY,
-EXTERNAL_NAME,
-EXTERNAL_LANGUAGE,
-PARAMETER_STYLE,
-IS_DETERMINISTIC,
-SQL_DATA_ACCESS,
-SQL_PATH,
-SECURITY_TYPE,
-CREATED,
-LAST_ALTERED,
-SQL_MODE,
-ROUTINE_COMMENT,
-DEFINER,
-CHARACTER_SET_CLIENT,
-COLLATION_CONNECTION,
-DATABASE_COLLATION from information_schema.routines
-where routine_schema='{0}'
-"""
-
-sqlanalyzeplugin="""
-select plugin_name,plugin_version,plugin_type,plugin_type_version,plugin_library,plugin_library_version,load_option,plugin_license,plugin_author,plugin_description
- from information_schema.plugins
-where plugin_name not like 'INNODB%' and plugin_status='ACTIVE'
+sqldbassess=""""select table_schema, table_name, table_type, ROW_FORMAT, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH, INDEX_LENGTH from information_schema.tables where table_schema = '{0}' order by 2,1,4,3"
+"select SPECIFIC_NAME, ROUTINE_CATALOG, ROUTINE_NAME, ROUTINE_TYPE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION,
+NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, DTD_IDENTIFIER, ROUTINE_BODY, EXTERNAL_NAME, EXTERNAL_LANGUAGE, PARAMETER_STYLE,
+IS_DETERMINISTIC, SQL_DATA_ACCESS, SQL_PATH, SECURITY_TYPE, CREATED, LAST_ALTERED, SQL_MODE, ROUTINE_COMMENT, DEFINER, CHARACTER_SET_CLIENT, COLLATION_CONNECTION,
+DATABASE_COLLATION from information_schema.routines where routine_schema='{0}'"
+"select plugin_name,plugin_version,plugin_type,plugin_type_version,plugin_library,plugin_library_version,load_option,plugin_license,plugin_author,plugin_description
+from information_schema.plugins where plugin_name not like 'INNODB%' and plugin_status='ACTIVE'"
 """
 
 
@@ -305,18 +275,23 @@ def trap_signal(signum, stack):
     global mode,expoldvars,sharedvar,impoldvars
     logging.info("Ctrl-C has been pressed!")
 
-    if (sharedvar.value>0):
-       sys.exit()
-    else:
-       sharedvar.value=1
+    try:
+       if (sharedvar.value>0):
+          sys.exit()
+       else:
+          sharedvar.value=1
 
-    if (cfgmode=='import'):
-       oldvars=impoldvars
-    elif (cfgmode=='export'):
-       oldvars=expoldvars
-    else:
+       if (cfgmode=='import'):
+          oldvars=impoldvars
+       elif (cfgmode=='export'):
+          oldvars=expoldvars
+       else:
+          logging.info("Exiting...")
+          sys.exit(0) 
+
+    except NameError:
        logging.info("Exiting...")
-       sys.exit(0) 
+       sys.exit(0)
 
     server=read_config(cfgmode,'servername')
     port=read_config(cfgmode,'port')
@@ -370,7 +345,7 @@ def rawincount(filename):
     try:
        with pgzip.open(filename, 'rt',thread=0) as f:
            #return(sum(1 if(re.search(sep1+".*"+eol+crlf,buf)) else 0 for buf in f))
-           return(sum(1 if(re.findall(sep1+eol+crlf+"|"+quote+eol+crlf,buf)) else 0 for buf in f))
+           return(sum(1 if(re.findall(sep1+eol+crlf+"|"+quote+eol+crlf+"|"+esc+"N"+eol+crlf,buf)) else 0 for buf in f))
     except Exception as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        return(0)
@@ -924,13 +899,14 @@ def verify_data(tablefile,impuser,imppass,impserver,impport,impcharset,impdataba
 
 #procedure how to use this script
 def usage():
-    print("\nUsage: \n   "+
+    print("\033[1;33;10m\nUsage: \n   "+
     os.path.basename(__file__) + " [OPTIONS]\nGeneral options:")
     print("   -e, --export-to-client  export to a client mode")
     print("   -E, --export-to-server  export to a server mode (very fast)")
     print("   -i, --import            import mode")
     print("   -s, --script            generate scripts")
     print("   -d, --dbinfo            gather DB information")
+    print("   -t, --db-list=          all|list|db1,db2,dbN")
     print("   -a, --all-info          gather All information from information_schema")
     print("   -l, --log=              INFO|DEBUG|WARNING|ERROR|CRITICAL\n")
 
@@ -947,14 +923,14 @@ def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
        return(0)
     except (Exception, pymysql.Error) as logerr:
        if (str(logerr).find("Access Denied")>0):
-          print("\033[1;31;40m"+str(logerr))
+          logging.info("\033[1;31;40m"+str(logerr))
           return(1)
        elif (str(logerr).find("Can't connect to"))>0:
-          print("\033[1;31;40m"+str(logerr)+" ,Exiting......\033[0m")
+          logging.info("\033[1;31;40m"+str(logerr)+" ,Exiting......\033[0m")
           if(impconnection): impconnection.close()
           exit(1)
        else:
-          print("\033[1;31;40mOther Error occurred: "+str(logerr))
+          logging.info("\033[1;31;40mOther Error occurred: "+str(logerr))
           return(1)
     
 
@@ -971,11 +947,33 @@ def import_data():
     impparallel = int(read_config('import','parallel'))
     imptables=read_config('import','tables')
     impca = read_config('import','sslca')
+    impconvcharset = read_config('import','convertcharset')
+    thedb=" "
+    logging.info("\033[1;33mTarget database is : "+impdatabase)
+
+
+    if (len(expdatabase.split(","))>1):
+        logging.info("Found multiple source databases!")
+        while (thedb not in expdatabase or thedb == "" ):
+            logging.info("\033[1;33mWhich database {} ? : ".format(expdatabase))
+            thedb = input(">>>>>> Enter Database : << ")
+        expdatabase=thedb
 
     gicharcollation=gather_database_charset(impserver,impport,impdatabase,"TARGET")
-    gicharset=gicharcollation[0]
+    gicharsetorig=gicharcollation[0]
+    gicharset=gicharsetorig
     gicollation=gicharcollation[1]
-    logging.info("Database "+impdatabase+" character set is : "+gicharset+" collation is : "+gicollation)
+
+    if (impconvcharset is not None):
+       if (gicharset==impconvcharset.split(":")[0]):
+           gicharset=impconvcharset.split(":")[1]
+           logging.info("Database "+impdatabase+" original character set is   : "+gicharsetorig+" collation is : "+gicollation)
+           logging.info("Database "+impdatabase+" character set is changed to : "+gicharset+" collation is : "+gicollation)
+       else:
+           logging.info("Database "+impdatabase+" character set is : "+gicharset+" collation is : "+gicollation)
+    else:
+       logging.info("Database "+impdatabase+" character set is : "+gicharset+" collation is : "+gicollation)
+
     #getting character set and collation from export data
     getcharsetfile = open(expdatabase+"/"+crcharset,"r")
     getcharcollation=getcharsetfile.read()
@@ -984,9 +982,9 @@ def import_data():
     if (getcharsetfile):
        getcharsetfile.close()
 
-    if (getcharset!=gicharset or getcollation!=gicollation):
-        logging.info("Source database character set and collation is : "+getcharset+" "+getcollation)
-        logging.info("Target database character set and collation is : "+gicharset+" "+gicollation)
+    if (getcharset!=gicharsetorig or getcollation!=gicollation):
+        logging.info("Source database original character set and collation is : "+getcharset+" "+getcollation)
+        logging.info("Target database original character set and collation is : "+gicharsetorig+" "+gicollation)
         logging.info("Source and Target database must have the same character set and collation")
         exit()
 
@@ -1323,7 +1321,7 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
        f=pgzip.open(expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz","wt", thread=0)
 
        allrecords=spcursor.fetchall_unbuffered()
-
+       
        for records in allrecords:
           rowcount+=1
           fields=""
@@ -1339,7 +1337,12 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
              elif (isinstance(record, bytes)):
                 #rowdata=rowdata+"'"+record.decode().replace("\\","\\\\").replace("'","\\'")+"'"+'\t'
                 #rowdata=rowdata+"'"+record.decode()+sep1
-                rowdata=rowdata+quote+record.decode()+quote+sep1
+                try:
+                   rowdata=rowdata+quote+record.decode()+quote+sep1
+                except (Exception) as error:
+                   if (str(error).find("'utf-8' codec can't decode")!=-1):
+                      rowdata=rowdata+quote+record.decode("ISO-8859-1")+quote+sep1
+                   pass
              elif (isinstance(record, float)):
                 rowdata=rowdata+quote+exp2normal(record)+quote+sep1
              elif (isinstance(record, int)):
@@ -1349,9 +1352,9 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
              elif (isinstance(record, str)):
                 rowdata=rowdata+quote+record+quote+sep1
              else:
-                print("===="+record+"=====")
-                #rowdata=rowdata+str(record).replace("","\\N")+sep1
-          f.write(rowdata[:-1]+eol+crlf)
+                #print("===="+str(record)+"=====")
+                rowdata=rowdata+quote+str(record)+quote+sep1
+          f.write(rowdata[:-len(sep1)]+eol+crlf)
 
           if (rowcount>=int(exprowchunk)):
              logging.info(mprocessid+" Written "+str(rowcount)+" rows to \033[1;34;40m"+expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz")
@@ -1386,12 +1389,14 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
              f.close()
           spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,expdatabase,exprowchunk,expca)
        elif (str(error).find("'charmap' codec can't decode byte")!=-1):
+          logging.error(mprocessid+" \033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+          logging.error(mprocessid+" \033[1;31;40mDatabase : "+expdatabase+", Table : "+tbldata+", charset : "+expcharset)
           logging.error(mprocessid+" \033[1;31;40munknow character was found in the table "+tbldata+" rownum: "+str(rowcount+1))
-          logging.error(mprocessid+" \033[1;31;40mTo get the data please run the following query:")
+          logging.error(mprocessid+" \033[1;31;40mTo get the data please run the following query on database "+expdatabase+" :")
           logging.error(mprocessid+" \033[1;31;40mselect * from (select *,row_number() over () rownum from "+tbldata+") tbl where tbl.rownum="+str(rowcount+1))
        else:
           logging.error(mprocessid+" \033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-          logging.error(mprocessid+" \033[1;31;40mTable : "+tbldata+" rownum : "+str(rowcount+1)+" charset : "+expcharset)
+          logging.error(mprocessid+" \033[1;31;40mDatabase : "+expdatabase+" Table : "+tbldata+" rownum : "+str(rowcount)+" charset : "+expcharset)
 
     finally:
        if(spconnection):
@@ -1479,23 +1484,34 @@ def runquery(query,qconn,**kwargs):
     try:
        label=kwargs.get('label',None)
        label2=kwargs.get('label2',None)
+       qtype=kwargs.get('qtype',None)
+       qseq=None
+       if (qtype=='OTHER_INFORMATION'):
+           qseq=kwargs.get('qseq',None)
+
        if (label!=None):
           afile.write("======================="+label+"=========================\n") 
        if (label2!=None):
-          afile.write("\n"+label2+"\n")
+          afile.write("\n"+label2.replace("\n"," ")+"\n")
        curobj=qconn.cursor()
        curobj.execute(query)
        rows=curobj.fetchall()
        totalcols=len(curobj.description)
       
        colnames=",".join([desc[0] for desc in curobj.description])
-       afile.write(str(colnames)+"\n")
+       if (qseq!=None):
+           afile.write(str(qseq)+sOI+str(colnames)+"\n")
+       else:
+           afile.write(str(colnames)+"\n")
       
        for row in rows:
           rowline=""
           for col in range(totalcols):
              rowline+=str(row[col])+","
-          afile.write(str(rowline[:-1])+"\n")
+          if (qseq!=None):
+             afile.write(str(qseq)+sOI+str(rowline[:-1])+"\n")
+          else:
+             afile.write(str(rowline[:-1])+"\n")
 
        curobj.close()
        if (label!=None):
@@ -1505,8 +1521,99 @@ def runquery(query,qconn,**kwargs):
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        pass
 
+#Gathering info from db
+def gather_database_info(auser,apass,aserver,aport,gecharset,aca,thedir,thedb):
+    global afile
+    logging.info("\033[1;36mGathering information from database "+thedb)
+     
+    try:
+        aconn = pymysql.connect(user=auser,
+                                password=apass,
+                                host=aserver,
+                                port=int(aport),
+                                charset=gecharset,
+                                ssl_ca=aca,
+                                database=thedb)
+
+        afile=open(thedir+"/"+crdbinfo+"_"+thedb+".csv", 'wt')
+
+        rno=0
+        for rowassess in csv.reader(StringIO(sqldbassess), delimiter=','):
+            rno=rno+1
+            logging.info("Executing query "+rowassess[0])
+            runquery(rowassess[0].format(thedb),aconn,label2=str(rno)+sOI+"QUERY :,"+"\""+rowassess[0]+"\"")
+
+        afile.close()
+    except (Exception,pymysql.Error) as error:
+        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+        if (aconn):
+            aconn.close()
+        pass 
+
+def check_databases(dblist,auser,apass,aserver,aport,gecharset,aca):
+    global retdblist
+    checkpass=apass
+
+    while test_connection(auser,checkpass,aserver,aport,'mysql',aca)==1:
+        checkpass=getpass.getpass('Enter Password for '+auser+' :')
+        obfuscatedpass=encode_password(checkpass)
+        config.set("export","password",obfuscatedpass)
+        with open(configfile, 'w') as cfgfile:
+           config.write(cfgfile)
+
+    if (dblist=='all'):
+       logging.info("\033[1;36;40mGathering list of all databases")
+       checkdb='mysql'
+       try:
+           aconn = pymysql.connect(user=auser,
+                           password=checkpass,
+                           host=aserver,
+                           port=int(aport),
+                           charset=gecharset,
+                           ssl_ca=aca,
+                           database='mysql')
+
+           acursor=aconn.cursor()
+           acursor.execute("SHOW DATABASES")
+           alldbs=acursor.fetchall()
+           for thedb in alldbs:
+               check_databases(thedb,auser,checkpass,aserver,aport,gecharset,aca)
+
+       except (Exception,pymysql.Error) as error:
+           logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+           if (aconn):
+               aconn.close()
+           pass
+
+    elif (len(dblist.split(","))>1):
+       for thedb in dblist.split(","):
+           check_databases(thedb,auser,checkpass,aserver,aport,gecharset,aca)
+    else:
+       gecharcollation=gather_database_charset(aserver,aport,dblist,"ADMIN",dbuser=auser,dbpass=checkpass)
+       gecharset=gecharcollation[0]
+       try:
+           aconn = pymysql.connect(user=auser,
+                           password=checkpass,
+                           host=aserver,
+                           port=int(aport),
+                           charset=gecharset,
+                           ssl_ca=aca,
+                           database=dblist)
+
+           acursor=aconn.cursor()
+           acursor.execute("SHOW TABLES")
+           retdblist.append(dblist)
+
+       except (Exception,pymysql.Error) as error:
+           logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+           if (aconn):
+               aconn.close()
+           pass
+
+    return(retdblist)
+
 #procedure to get all information from information_schema
-def get_all_info():
+def get_all_info(**kwargs):
     global afile,gecharset
     aserver = read_config('export','servername')
     aport = read_config('export','port')
@@ -1515,6 +1622,8 @@ def get_all_info():
     auser=input('Enter admin username :')
     apass=getpass.getpass('Enter Password for '+auser+' :')
 
+
+    dblist=kwargs.get('dblist',None)
 
     #Create directory to spool all export files
     try:
@@ -1536,42 +1645,76 @@ def get_all_info():
     gecharset=gecharcollation[0]
     gecolation=gecharcollation[1]
 
-    logging.info("Gathering information from information_schema")
-    try:
-       aconn = pymysql.connect(user=auser,
+    if (dblist!=None):
+        if (dblist in ("list","all")):
+            logging.info("\033[1;36;40mGathering list of database")
+            try:
+                aconn = pymysql.connect(user=auser,
                                 password=apass,
                                 host=aserver,
                                 port=int(aport),
                                 charset=gecharset,
                                 ssl_ca=aca,
-                                database="information_schema")
+                                database='mysql')
 
-       afile=open(adatabase+"/"+crallinfo+"_OTHER_INFORMATION.csv", 'wt')
-       for rowassess in csv.reader(StringIO(sqlassess), delimiter=','):
-           logging.info("Executing query "+rowassess[0])
-           runquery(rowassess[0],aconn,label2="QUERY :,"+"\""+rowassess[0]+"\"")
+                acursor=aconn.cursor()
+                acursor.execute("SHOW DATABASES")
+                alldbs=acursor.fetchall()
+                for row in alldbs:
+                    logging.info("\033[1;33m"+row[0])
 
-       afile.close()
+            except (Exception,pymysql.Error) as error:
+                logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+            finally:
+                if (aconn):
+                    aconn.close()
 
-       acursor=aconn.cursor()
-       acursor.execute("SHOW TABLES")
-       rows=acursor.fetchall()
-       for row in rows:
-           afile=open(adatabase+"/"+crallinfo+"_"+row[0]+".csv", 'wt')
-           logging.info("Spooling data "+row[0]+" to a file "+crallinfo+"_"+row[0]+".csv")
-           runquery("select * from "+row[0],aconn,label=row[0])
+            if(dblist=="all"):
+                for thedb in alldbs: 
+                    gather_database_info(auser,apass,aserver,aport,gecharset,aca,adatabase,thedb[0])
+        else:     
+            for thedb in dblist.split(","):
+                gather_database_info(auser,apass,aserver,aport,gecharset,aca,adatabase,thedb)
+    else:
+
+        logging.info("Gathering information from information_schema")
+        try:
+           aconn = pymysql.connect(user=auser,
+                                    password=apass,
+                                    host=aserver,
+                                    port=int(aport),
+                                    charset=gecharset,
+                                    ssl_ca=aca,
+                                    database="information_schema")
+    
+           afile=open(adatabase+"/"+crallinfo+"_OTHER_INFORMATION.csv", 'wt')
+           rno=0
+           for rowassess in csv.reader(StringIO(sqlassess), delimiter=','):
+               rno=rno+1
+               logging.info("Executing query "+rowassess[0])
+               runquery(rowassess[0],aconn,label2=str(rno)+sOI+"QUERY :,"+"\""+rowassess[0]+"\"",qtype='OTHER_INFORMATION',qseq=rno)
+    
            afile.close()
-      
-    except (Exception,pymysql.Error) as error:
-       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-       pass
-    finally:
-       if (aconn):
-          aconn.close()
-
+    
+           acursor=aconn.cursor()
+           acursor.execute("SHOW TABLES")
+           rows=acursor.fetchall()
+           for row in rows:
+               afile=open(adatabase+"/"+crallinfo+"_"+row[0]+".csv", 'wt')
+               logging.info("Spooling data "+row[0]+" to a file "+crallinfo+"_"+row[0]+".csv")
+               runquery("select * from "+row[0],aconn,label=row[0])
+               afile.close()
+          
+        except (Exception,pymysql.Error) as error:
+           logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+           pass
+        finally:
+           if (aconn):
+              aconn.close()
+    
 def gather_database_charset(lserver,lport,ldatabase,targetdb,**kwargs):
     global configfile
-
+    
     if (targetdb=="TARGET"):
        logging.info("Gathering source database character set information from server: "+lserver+":"+lport+" database: "+ldatabase)
        luser = read_config('import','username')
@@ -1672,7 +1815,7 @@ def analyze_source_database():
     gecharset=gecharcollation[0]
     gecollation=gecharcollation[1]
 
-    logging.info("Gathering information from database "+adatabase)
+    logging.info("\033[1;36mGathering information from database "+adatabase)
     try:
        aconn = pymysql.connect(user=auser,
                                 password=apass,
@@ -1682,17 +1825,13 @@ def analyze_source_database():
                                 charset=gecharset,
                                 database=adatabase)
 
-       afile=open(adatabase+"/"+cranalyzedbfilename+"_"+adatabase+".csv", 'wt')
-
-       afile.write("\nPlugins\n")
-       runquery(sqlanalyzeplugin,aconn)
-       afile.write("\nTables information\n")
-       runquery(sqlanalyzetableinfo.format(adatabase),aconn)
-       afile.write("\nStored Procedures and Functions information\n")
-       runquery(sqlanalyzeprocfuncinfo.format(adatabase),aconn)
+       afile=open(adatabase+"/"+crdbinfo+"_"+adatabase+".csv", 'wt')
+       for rowassess in csv.reader(StringIO(sqldbassess), delimiter=','):
+           logging.info("Executing query "+rowassess[0])
+           runquery(rowassess[0].format(adatabase),aconn,label2="QUERY :,"+"\""+rowassess[0]+"\"")
 
        afile.close()
-       logging.info("Gathered information has been stored to "+adatabase+"/"+cranalyzedbfilename+"_"+adatabase+".csv")
+       logging.info("Gathered information has been stored to "+adatabase+"/"+crdbinfo+"_"+adatabase+".csv")
       
     except (Exception,pymysql.Error) as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
@@ -1757,169 +1896,189 @@ def export_data(**kwargs):
     expport = read_config('export','port')
     expuser = read_config('export','username')
     expdatabase = read_config('export','database')
-
-
-    gecharcollation=gather_database_charset(expserver,expport,expdatabase,"SOURCE")
-    gecharset=gecharcollation[0]
-    gecollation=gecharcollation[1]
-    logging.info("Database "+expdatabase+" character set is : "+gecharset)
- 
-    #Create directory to spool all export files
-    try:
-       #directory name is source databasename
-       os.mkdir(expdatabase, 0o755 )
-    except FileExistsError as exists:
-       pass
-    except Exception as logerr:
-       logging.error("\033[1;31;40mError occured :"+str(logerr))
-       sys.exit(2)
-
-    exprowchunk = read_config('export','rowchunk')
-    expparallel = int(read_config('export','parallel'))
-    expmaxrowsperfile = int(read_config('export','maxrowsperfile'))
-    exppass = read_config('export','password')
     expca = read_config('export','sslca')
+    exppass = read_config('export','password')
+    expconvcharset = read_config('export','convertcharset')
+
     if (exppass==''):
        exppass=' ';
     exppass=decode_password(exppass)
 
-    expsetvars=set_params()
+    global retdblist
+    retdblist=[]
+
+    alldbs=check_databases(expdatabase,expuser,exppass,expserver,expport,None,expca)
+    exppass = decode_password(read_config('export','password'))
 
 
-    while test_connection(expuser,exppass,expserver,expport,expdatabase,expca)==1:
-       exppass=getpass.getpass('Enter Password for '+expuser+' :')
-    obfuscatedpass=encode_password(exppass)
-    config.set("export","password",obfuscatedpass)
-    with open(configfile, 'w') as cfgfile:
-       config.write(cfgfile)
+    for expdatabase in alldbs:
+        gecharcollation=gather_database_charset(expserver,expport,expdatabase,"SOURCE")
+        gecharsetorig=gecharcollation[0]
+        gecharset=gecharsetorig
 
-    exptables = read_config('export','tables')
+        if (expconvcharset is not None):
+            if (gecharset==expconvcharset.split(":")[0]):
+                gecharset=expconvcharset.split(":")[1]
+                logging.info("Database "+expdatabase+" original character set is   : "+gecharsetorig)
+                logging.info("Database "+expdatabase+" character set is changed to : "+gecharset)
+            else:
+                logging.info("Database "+expdatabase+" character set is : "+gecharset)
+        else:    
+            logging.info("Database "+expdatabase+" character set is : "+gecharset)
 
-    dtnow=datetime.datetime.now()
-    logging.info("Exporting Data from Database: "+expdatabase+" Start Date:"+dtnow.strftime("%d-%m-%Y %H:%M:%S"))
-    try:
-       expconnection = pymysql.connect(user=expuser,
-                                        password=exppass,
-                                        host=expserver,
-                                        port=int(expport),
-                                        charset=gecharset,
-                                        ssl_ca=expca,
-                                        database=expdatabase)
-
-    except (Exception,pymysql.Error) as error:
-       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-       sys.exit()
+        gecollation=gecharcollation[1]
+     
+        #Create directory to spool all export files
+        try:
+           #directory name is source databasename
+           os.mkdir(expdatabase, 0o755 )
+        except FileExistsError as exists:
+           pass
+        except Exception as logerr:
+           logging.error("\033[1;31;40mError occured :"+str(logerr))
+           sys.exit(2)
     
-    expoldvars=get_params()
-
-    global sqllisttables,sqltablesizes,sharedvar
-    try: 
-
-       curtblinfo = expconnection.cursor()
-
-       for expsetvar in expsetvars:
-           try:
-              logging.info("Executing "+expsetvar)
-              curtblinfo.execute(expsetvar)
-           except (Exception,pymysql.Error) as error:
-              if (str(error).find("Access denied")!=-1):
-                  logging.info("\033[1;33;40m>>>> Setting global variable must require SUPER or SYSTEM_VARIABLES_ADMIN privileges")
-                  logging.info("\033[1;33;40m>>>> GRANT SYSTEM_VARIABLES_ADMIN on *.* to "+expuser+";")
-              else:
-                  logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-       
-       #generate_create_fkey()
-       #generate_create_okey()
-       generate_create_sequence()
-       generate_create_trigger()
-       generate_create_view()
-       generate_create_proc_and_func()
-
-       curtblinfo.execute(sqltableinfo.format(expdatabase))
-
-       tblinforows=curtblinfo.fetchall()
-
-       listoftables=[]
-       totalsize=0
-       for tblinforow in tblinforows:
-           if exptables=="all":
-              totalsize+=tblinforow[1] 
-              listoftables.append(tblinforow[0])
-           else:
-              selectedtbls=exptables.split(",")
-              for selectedtbl in selectedtbls:
-                  if selectedtbl!=tblinforow[0]:
-                     continue
-                  else:
-                     totalsize+=tblinforow[1] 
-                     listoftables.append(tblinforow[0])
-                     
-       crcharsetfile = open(expdatabase+"/"+crcharset,"w")
-       crcharsetfile.write(gecharset+","+gecollation)
-       if (crcharsetfile):
-          crcharsetfile.close()
-
-       
-       crtblfile = open(expdatabase+"/"+crtblfilename,"w")
-
-       for tbldata in listoftables:
-           logging.info("Generating create table "+tbldata+" script...")
-           generate_create_table(tbldata)
-
-       if (crtblfile):
-          crtblfile.close()
-
-       if mode=="script":
-          if(curtblinfo): curtblinfo.close()
-          sys.exit()
-
-       global totalproc
-
-
-       #manager = mproc.Manager()
-
-       sharedvar=mproc.Value('i',0)
-       resultlist=mproc.Manager().list()
-       sharedvar.value=0
-
-       with mproc.Pool(processes=expparallel) as exportpool:
-          if (kwargs.get('spool',None)=='toclient' or kwargs.get('spool',None)==None):
-             multiple_results = [exportpool.apply_async(spool_data_unbuffered, args=(tbldata,expuser,exppass,expserver,expport,gecharset,expdatabase,exprowchunk,expca),callback=cb) for tbldata in listoftables]
-             exportpool.close()
-             exportpool.join()
-             [res.get() for res in multiple_results]
-
-          elif (kwargs.get('spool',None)=='toserver'):
-             multiple_results = [exportpool.apply_async(spool_table_fast, args=(tbldata,expuser,exppass,expserver,expport,gecharset,expdatabase,expca),callback=cb) for tbldata in listoftables]
-             exportpool.close()
-             exportpool.join()
-             [res.get() for res in multiple_results]
-          else:
-             logging.info("Skipping export....")
-          
-       for rslt in resultlist:
-          logging.info(rslt) 
+        exprowchunk = read_config('export','rowchunk')
+        expparallel = int(read_config('export','parallel'))
+        expmaxrowsperfile = int(read_config('export','maxrowsperfile'))
+        expsetvars=set_params()
         
-       for expoldvar in expoldvars:
-           try:
-              logging.info("Executing "+expoldvar)
-              curtblinfo.execute(expoldvar)
-           except (Exception,pymysql.Error) as error:
-              if (str(error).find("Access denied")!=-1):
-                  logging.info("\033[1;33;40m>>>> Setting global variable must require SUPER or SYSTEM_VARIABLES_ADMIN privileges")
-                  logging.info("\033[1;33;40m>>>> GRANT SYSTEM_VARIABLES_ADMIN on *.* to "+expuser+";")
+    
+        while test_connection(expuser,exppass,expserver,expport,expdatabase,expca)==1:
+           exppass=getpass.getpass('Enter Password for '+expuser+' :')
+        obfuscatedpass=encode_password(exppass)
+        config.set("export","password",obfuscatedpass)
+        with open(configfile, 'w') as cfgfile:
+           config.write(cfgfile)
+    
+        exptables = read_config('export','tables')
+    
+        dtnow=datetime.datetime.now()
+        logging.info("Exporting Data from Database: "+expdatabase+" Start Date:"+dtnow.strftime("%d-%m-%Y %H:%M:%S"))
+        try:
+           expconnection = pymysql.connect(user=expuser,
+                                            password=exppass,
+                                            host=expserver,
+                                            port=int(expport),
+                                            charset=gecharset,
+                                            ssl_ca=expca,
+                                            database=expdatabase)
+    
+        except (Exception,pymysql.Error) as error:
+           logging.error("\033[1;31;40mDatabase : "+expdatabase+", charset : "+gecharset)
+           logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+           sys.exit()
+        
+        expoldvars=get_params()
+    
+        global sqllisttables,sqltablesizes,sharedvar
+        try: 
+    
+           curtblinfo = expconnection.cursor()
+    
+           for expsetvar in expsetvars:
+               try:
+                  logging.info("Executing "+expsetvar)
+                  curtblinfo.execute(expsetvar)
+               except (Exception,pymysql.Error) as error:
+                  if (str(error).find("Access denied")!=-1):
+                      logging.info("\033[1;33;40m>>>> Setting global variable must require SUPER or SYSTEM_VARIABLES_ADMIN privileges")
+                      logging.info("\033[1;33;40m>>>> GRANT SYSTEM_VARIABLES_ADMIN on *.* to "+expuser+";")
+                  else:
+                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+           
+           #generate_create_fkey()
+           #generate_create_okey()
+           generate_create_sequence()
+           generate_create_trigger()
+           generate_create_view()
+           generate_create_proc_and_func()
+    
+           curtblinfo.execute(sqltableinfo.format(expdatabase))
+    
+           tblinforows=curtblinfo.fetchall()
+    
+           listoftables=[]
+           totalsize=0
+           for tblinforow in tblinforows:
+               if exptables=="all":
+                  totalsize+=tblinforow[1] 
+                  listoftables.append(tblinforow[0])
+               else:
+                  selectedtbls=exptables.split(",")
+                  for selectedtbl in selectedtbls:
+                      if selectedtbl!=tblinforow[0]:
+                         continue
+                      else:
+                         totalsize+=tblinforow[1] 
+                         listoftables.append(tblinforow[0])
+                         
+           crcharsetfile = open(expdatabase+"/"+crcharset,"w")
+           crcharsetfile.write(gecharsetorig+","+gecollation)
+           if (crcharsetfile):
+              crcharsetfile.close()
+    
+           
+           crtblfile = open(expdatabase+"/"+crtblfilename,"w")
+    
+           for tbldata in listoftables:
+               logging.info("Generating create table "+tbldata+" script...")
+               generate_create_table(tbldata)
+    
+           if (crtblfile):
+              crtblfile.close()
+    
+           if mode=="script":
+              if(curtblinfo): curtblinfo.close()
+              sys.exit()
+    
+           global totalproc
+    
+    
+           #manager = mproc.Manager()
+    
+           sharedvar=mproc.Value('i',0)
+           resultlist=mproc.Manager().list()
+           sharedvar.value=0
+    
+           with mproc.Pool(processes=expparallel) as exportpool:
+              if (kwargs.get('spool',None)=='toclient' or kwargs.get('spool',None)==None):
+                 multiple_results = [exportpool.apply_async(spool_data_unbuffered, args=(tbldata,expuser,exppass,expserver,expport,gecharset,expdatabase,exprowchunk,expca),callback=cb) for tbldata in listoftables]
+                 exportpool.close()
+                 exportpool.join()
+                 [res.get() for res in multiple_results]
+    
+              elif (kwargs.get('spool',None)=='toserver'):
+                 multiple_results = [exportpool.apply_async(spool_table_fast, args=(tbldata,expuser,exppass,expserver,expport,gecharset,expdatabase,expca),callback=cb) for tbldata in listoftables]
+                 exportpool.close()
+                 exportpool.join()
+                 [res.get() for res in multiple_results]
               else:
-                  logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-
-
-    except (Exception,pymysql.Error) as error:
-       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-   
-    finally:
-       if(expconnection):
-          curtblinfo.close()
-          expconnection.close()
-          logging.info("\033[1;37;40mDatabase export connections are closed")
+                 logging.info("Skipping export....")
+              
+           for rslt in resultlist:
+              logging.info(rslt) 
+            
+           for expoldvar in expoldvars:
+               try:
+                  logging.info("Executing "+expoldvar)
+                  curtblinfo.execute(expoldvar)
+               except (Exception,pymysql.Error) as error:
+                  if (str(error).find("Access denied")!=-1):
+                      logging.info("\033[1;33;40m>>>> Setting global variable must require SUPER or SYSTEM_VARIABLES_ADMIN privileges")
+                      logging.info("\033[1;33;40m>>>> GRANT SYSTEM_VARIABLES_ADMIN on *.* to "+expuser+";")
+                  else:
+                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+    
+    
+        except (Exception,pymysql.Error) as error:
+           logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+       
+        finally:
+           if(expconnection):
+              curtblinfo.close()
+              expconnection.close()
+              logging.info("\033[1;37;40mDatabase export connections are closed")
 
 #Main program
 def main():
@@ -1931,9 +2090,9 @@ def main():
     #initiate signal handler, it will capture if user press ctrl+c key, the program will terminate
     handler = signal.signal(signal.SIGINT, trap_signal)
     try:
-       opts, args = getopt.getopt(sys.argv[1:], "heEisvl:da", ["help", "exportclient","exportserver", "import","script","log=","dbinfo","allinfo"])
-    except getopt.GetoptError as err:
-       logging.error("\033[1;31;40mError occured: "+err) # will print something like "option -a not recognized"
+       opts, args=getopt.getopt(sys.argv[1:], "hl:eEisvdt:a", ["help","log=","export-to-client","export-to-server","import","script","dbinfo","db-list=","all-info"])
+    except (Exception,getopt.GetoptError) as error:
+       logging.error("\n\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        usage()
        sys.exit(2)
 
@@ -1941,6 +2100,8 @@ def main():
     global impconnection
     global config,configfile
     global esc,sep1,eol,crlf,quote
+    global dblist
+    dblist=None
     verbose = False
     #default log level value
     loglevel="INFO"
@@ -1952,22 +2113,25 @@ def main():
         elif o in ("-h", "--help"):
             usage()
             sys.exit()
-        elif o in ("-e", "--export-to-client"):
+        elif o in ("-e",'--export-to-client'):
             mode = "exportclient"
-        elif o in ("-E", "--export-to-server"):
+        elif o in ("-E","--export-to-server"):
             mode = "exportserver"
-        elif o in ("-i", "--import"):
+        elif o in ("-i","--import"):
             mode = "import"
-        elif o in ("-s", "--script"):
+        elif o in ("-s","--script"):
             mode = "script"
-        elif o in ("-l", "--log"):
+        elif o in ("-l","--log"):
             loglevel = a
-        elif o in ("-d", "--dbinfo"):
+        elif o in ("-d","--dbinfo"):
             mode = "dbinfo"
-        elif o in ("-a", "--all-info"):
+        elif o in ("-t","--db-list"):
+            mode = "dbinfo"
+            dblist = a
+        elif o in ("-a","--all-info"):
             mode = "allinfo"
         else:
-            assert False, "unhandled option"
+            assert False,"unhandled option"
   
     if mode==None:
        usage()
@@ -2015,8 +2179,12 @@ def main():
           logging.info("Generating database scripts......")
           export_data()
        elif mode=="dbinfo":
-          logging.info("Generating database information......")
-          analyze_source_database()
+          if (dblist==None):
+             logging.info("Generating current database information......")
+             analyze_source_database()
+          else:
+             logging.info("Generating all database information......")
+             get_all_info(dblist=dblist)
        elif mode=="allinfo":
           logging.info("Gathering All information belongs to this schema/database......")
           get_all_info()
@@ -2025,6 +2193,9 @@ def main():
 
     except (Exception,configparser.Error) as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+       stkerr = traceback.TracebackException.from_exception(error)
+       for allerr in stkerr.stack.format():
+           logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+allerr.replace("\n",""))
    
    
 if __name__ == "__main__":
