@@ -2,14 +2,17 @@
 Scripts to Perform Database Migrations built by me using Python3
 
 # Features
+- Enforce to use Python3 virtual environment, so required modules are downloaded to virtual environment
 - multiprocessing to perform simultaneous exports and imports
 - Slice into chunks to perform multiplple inserts per table
 - Compressed using pgzip to perform multiple compression using all processors that are available
 - Encrypted password is stored into config file to reduce typing when performing exports and imports
 - Spool all original DDLs (source DB) and converted DDLs (target DB) so it will be easy to debug or to be reverted back
-- Configurable separator, end of line, quote and escape
+- Configurable row data separator, end of line, quote and escape
 - Export all databases within the same instance or choose multiple databases separated by comma
 - Export all tables within database (apply to one database only) or choose multiple tables separated by comma
+- Compare the rowcount between exported file and imported data
+- Compare source and target database hash values on every single row of all tables
 
 # Source db and Target db
 At present my script will incorporate only few DB migrations and only OFFLINE migration for now
