@@ -87,14 +87,14 @@ How to use
 Usage:
    expimpmysql.py [OPTIONS]
 General options:
-   -e, --export-to-client  export to a client mode
-   -E, --export-to-server  export to a server mode (very fast)
-   -i, --import            import mode
-   -s, --script            generate scripts
-   -d, --dbinfo            gather DB information
-   -t, --db-list=          all|list|db1,db2,dbN
-   -a, --all-info          gather All information from information_schema
-   -l, --log=              INFO|DEBUG|WARNING|ERROR|CRITICAL
+   -e, --export-to-client        Export using Client Code
+   -E, --export-to-server        Export using Server Mode (very fast)
+   -i, --import                  Import Mode
+   -s, --script                  Generate Scripts
+   -d, --dbinfo  -t, --db-list=  Gather Database Info (all|list|db1,db2,dbN)
+   -a, --all-info                Gather All Information From information_schema
+   -c, --db-compare              Compare Database
+   -l, --log=                    INFO|DEBUG|WARNING|ERROR|CRITICAL
    
 </pre>
 
