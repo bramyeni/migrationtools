@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 561 2024-04-01 05:42:56Z bpahlawa $
+# $Id: expimpmysql.py 564 2024-04-02 06:21:37Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-01 13:42:56 +0800 (Mon, 01 Apr 2024) $
-# $Revision: 561 $
+# $Date: 2024-04-02 14:21:37 +0800 (Tue, 02 Apr 2024) $
+# $Revision: 564 $
 
 import re
 from string import *
@@ -26,11 +26,8 @@ import logging
 import datetime
 import readline
 import shutil
-import pymysql
-import configparser
 import csv
 import traceback
-import xxhash
 
 from itertools import (takewhile,repeat)
 import multiprocessing as mproc
@@ -1569,7 +1566,7 @@ def check_databases(dblist,auser,apass,aserver,aport,gecharset,aca):
     checkpass=apass
 
     while test_connection(auser,checkpass,aserver,aport,'mysql',aca)==1:
-        checkpass=getpass.getpass('Enter Password for '+auser+' :')
+        checkpass=getpass.getpass('Enter Password for '+auser+' :').replace('\b','')
         obfuscatedpass=encode_password(checkpass)
         config.set("export","password",obfuscatedpass)
         with open(configfile, 'w') as cfgfile:
@@ -1634,7 +1631,7 @@ def get_all_info(**kwargs):
     adatabase = 'mysql'
     aca = read_config('export','sslca')
     auser=input('Enter admin username :')
-    apass=getpass.getpass('Enter Password for '+auser+' :')
+    apass=getpass.getpass('Enter Password for '+auser+' :').replace('\b','')
 
 
     dblist=kwargs.get('dblist',None)
@@ -1740,7 +1737,7 @@ def gather_database_charset(lserver,lport,ldatabase,targetdb,**kwargs):
 
        while test_connection(luser,lpass,lserver,lport,ldatabase,lca)==1:
           logging.info("Password seems to be wrong.. please retype the correct one!")
-          lpass=getpass.getpass("Enter Password for "+luser+" :")
+          lpass=getpass.getpass("Enter Password for "+luser+" :").replace('\b','')
           obfuscatedpass=encode_password(lpass)
           config.set("import","password",obfuscatedpass)
        with open(configfile, 'w') as cfgfile:
@@ -1762,7 +1759,7 @@ def gather_database_charset(lserver,lport,ldatabase,targetdb,**kwargs):
 
        while test_connection(luser,lpass,lserver,lport,ldatabase,lca)==1:
           logging.info("Password seems to be wrong.. please retype the correct one!")
-          lpass=getpass.getpass("Enter Password for "+luser+" :")
+          lpass=getpass.getpass("Enter Password for "+luser+" :").replace('\b','')
           obfuscatedpass=encode_password(lpass)
           config.set("export","password",obfuscatedpass)
        with open(configfile, 'w') as cfgfile:
@@ -1818,7 +1815,7 @@ def compare_database():
         expdatabase=thedb
 
     while test_connection(expuser,exppass,expserver,expport,expdatabase,expca)==1:
-        exppass=getpass.getpass('Enter Password for '+expuser+' :')
+        exppass=getpass.getpass('Enter Password for '+expuser+' :').replace('\b','')
     obfuscatedpass=encode_password(exppass)
     config.set("export","password",obfuscatedpass)
     with open(configfile, 'w') as cfgfile:
@@ -1855,7 +1852,7 @@ def compare_database():
 
 
     while test_connection(impuser,imppass,impserver,impport,impdatabase,impca)==1:
-        imppass=getpass.getpass('Enter Password for '+impuser+' :')
+        imppass=getpass.getpass('Enter Password for '+impuser+' :').replace('\b','')
     obfuscatedpass=encode_password(imppass)
     config.set("import","password",obfuscatedpass)
     with open(configfile, 'w') as cfgfile:
@@ -2064,7 +2061,7 @@ def export_data(**kwargs):
         
     
         while test_connection(expuser,exppass,expserver,expport,expdatabase,expca)==1:
-           exppass=getpass.getpass('Enter Password for '+expuser+' :')
+           exppass=getpass.getpass('Enter Password for '+expuser+' :').replace('\b','')
         obfuscatedpass=encode_password(exppass)
         config.set("export","password",obfuscatedpass)
         with open(configfile, 'w') as cfgfile:
@@ -2201,10 +2198,13 @@ def export_data(**kwargs):
 
 #Main program
 def main():
-    global pgzip
-    neededmodules=['pgzip','pymysql','configparser']
+    global pgzip,xxhash,pymysql,configparser
+    neededmodules=['pgzip','pymysql','configparser','xxhash']
     build_python_env(neededmodules)
+    import pymysql
+    import configparser
     import pgzip
+    import xxhash
    
     #initiate signal handler, it will capture if user press ctrl+c key, the program will terminate
     handler = signal.signal(signal.SIGINT, trap_signal)
