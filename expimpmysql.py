@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 564 2024-04-02 06:21:37Z bpahlawa $
+# $Id: expimpmysql.py 567 2024-04-04 01:18:51Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-02 14:21:37 +0800 (Tue, 02 Apr 2024) $
-# $Revision: 564 $
+# $Date: 2024-04-04 09:18:51 +0800 (Thu, 04 Apr 2024) $
+# $Revision: 567 $
 
 import re
 from string import *
@@ -257,6 +257,8 @@ def build_python_env(modules):
     else:
        print("Checking virtual environment "+virtenv)
        try:
+          if (not os.path.isfile(virtenv+"/bin/activate")):
+             shutil.rmtree(virtenv)
           if (os.path.exists(virtenv)):
              allmodules=subprocess.Popen([virtenv+"/bin/pip","freeze"],stdout=subprocess.PIPE).communicate("")[0].decode('utf-8').replace("\n"," ")
              for module in modules:
@@ -923,6 +925,10 @@ def usage():
     print("   -l, --log=                    INFO|DEBUG|WARNING|ERROR|CRITICAL\n")
 
 def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
+    if ((not os.path.isfile(t_ca)) and t_ca != ""):
+       logging.info("\033[1;31;40mCertificate file "+t_ca+" doesnt exist!!....Exiting.....\033[0m")
+       exit(1)
+
     try:
        dbconnection = pymysql.connect(user=t_user,
                                         password=t_pass,
@@ -2015,6 +2021,8 @@ def export_data(**kwargs):
     expuser = read_config('export','username')
     exppass = read_config('export','password')
     expconvcharset = read_config('export','convertcharset')
+
+
 
     if (exppass==''):
        exppass=' ';
