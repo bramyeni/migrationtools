@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 571 2024-04-16 12:27:00Z bpahlawa $
+# $Id: expimpmysql.py 572 2024-04-16 12:39:59Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-16 20:27:00 +0800 (Tue, 16 Apr 2024) $
-# $Revision: 571 $
+# $Date: 2024-04-16 20:39:59 +0800 (Tue, 16 Apr 2024) $
+# $Revision: 572 $
 
 import re
 from string import *
@@ -777,9 +777,9 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
        curinsdata.execute("SET FOREIGN_KEY_CHECKS=0;")
        curinsdata.execute("set innodb_lock_wait_timeout="+implocktimeout)
        #curinsdata.execute("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table "+impdatabase+"."+tablename+" fields terminated by '\\t' ignore 1 LINES;")
-       curinsdata.execute("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table "+impdatabase+"."+tablename+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
+       curinsdata.execute("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
        testwr=open(dirname+"/"+tablefile+"-loadcmd.txt","w")
-       testwr.write("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table "+impdatabase+"."+tablename+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
+       testwr.write("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
        testwr.close()
 
        for warnmsg in insconnection.show_warnings():
@@ -874,7 +874,7 @@ def verify_data(tablefile,impuser,imppass,impserver,impport,impcharset,impdataba
        logging.info(mprocessid+" Counting no of rows from table \033[1;34;40m"+tablename)
 
        curvrfydata=vrfyconnection.cursor()
-       curvrfydata.execute("select count(*) from "+".".join(tablename.split(".")[0:2]))
+       curvrfydata.execute("select count(*) from `"+"`.`".join(tablename.split(".")[0:2])+"`")
        rows=curvrfydata.fetchone()
        rowsfromtable=rows[0]
 
@@ -1001,7 +1001,7 @@ def import_data():
        logging.info("Database "+impdatabase+" character set is : "+getcharset+" collation is : "+getcollation)
 
 
-    if (getcharset!=getcharsetorig):
+    if (getcharset!=gicharset):
         logging.info("Source database original character set and collation is : "+getcharset+" "+getcollation)
         logging.info("Target database original character set and collation is : "+gicharsetorig+" "+gicollation)
         logging.info("Source and Target database must have the same character set and collation")
@@ -1117,7 +1117,7 @@ def import_data():
                                if os.path.isfile(file2del): os.remove(file2del)
                            logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                           curimptbl.execute("truncate table "+row[0]+";")
+                           curimptbl.execute("truncate table `"+row[0]+"`;")
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
                            curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
 
@@ -1926,7 +1926,7 @@ def compare_database():
 
         for tbl in alltbls:
             logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
-            query="select * from "+tbl[0]+" order by 1"
+            query="select * from `"+tbl[0]+"` order by 1"
             scursor.execute(query)
             srows=scursor.execute(query)
             tcursor.execute(query)
@@ -1943,7 +1943,7 @@ def compare_database():
                 thash=xxhash.xxh64_hexdigest(str(tcursor.fetchone()))
                 if (shash!=thash):
                    logging.info("\033[1;31;40m"+expdatabase+" >> "+tbl[0]+" ROW# "+str(i)+" << "+impdatabase+" NOT MATCHED!!")
-                   logging.info(query+" (select *,row_number() over () rownum from "+tbl[0]+") tbl where tbl.rownum="+str(i))
+                   logging.info(query+" (select *,row_number() over () rownum from `"+tbl[0]+"`) tbl where tbl.rownum="+str(i))
                 else:
                    currtime=str(datetime.datetime.now())
                    print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+White+"MATCHED!!"+Coloff,end="",flush=True)
