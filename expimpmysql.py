@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 572 2024-04-16 12:39:59Z bpahlawa $
+# $Id: expimpmysql.py 573 2024-04-16 12:43:55Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-16 20:39:59 +0800 (Tue, 16 Apr 2024) $
-# $Revision: 572 $
+# $Date: 2024-04-16 20:43:55 +0800 (Tue, 16 Apr 2024) $
+# $Revision: 573 $
 
 import re
 from string import *
@@ -1077,7 +1077,7 @@ def import_data():
                  if not os.path.isfile(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
                     logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
                     curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                    curimptbl.execute("truncate table "+row[0]+";")
+                    curimptbl.execute("truncate table `"+row[0]+"`;")
                     curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
                     curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
                  else:
@@ -1091,7 +1091,7 @@ def import_data():
                                if os.path.isfile(file2del): os.remove(file2del)
                            logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                           curimptbl.execute("truncate table "+row[0]+";")
+                           curimptbl.execute("truncate table `"+row[0]+"`;")
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
                            curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
 
@@ -1103,7 +1103,7 @@ def import_data():
                  if not os.path.isfile(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
                     logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
                     curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                    curimptbl.execute("truncate table "+row[0]+";")
+                    curimptbl.execute("truncate table `"+row[0]+"`;")
                     curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
                     curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
                  else:
@@ -1151,7 +1151,7 @@ def import_data():
                         if not os.path.isfile(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
                            logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                           curimptbl.execute("truncate table "+row[0]+";")
+                           curimptbl.execute("truncate table `"+row[0]+"`;")
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
                            curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
                         else:
@@ -1165,7 +1165,7 @@ def import_data():
                                       if os.path.isfile(file2del): os.remove(file2del)
                                   logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
                                   curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                                  curimptbl.execute("truncate table "+row[0]+";")
+                                  curimptbl.execute("truncate table `"+row[0]+"`;")
                                   curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
                                   curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
 
@@ -1178,7 +1178,7 @@ def import_data():
                         if not os.path.isfile(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
                            logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                           curimptbl.execute("truncate table "+row[0]+";")
+                           curimptbl.execute("truncate table `"+row[0]+"`;")
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
                            curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
                         else:
@@ -1192,7 +1192,7 @@ def import_data():
                                     if os.path.isfile(file2del): os.remove(file2del)
                                  logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                                 curimptbl.execute("truncate table "+row[0]+";")
+                                 curimptbl.execute("truncate table `"+row[0]+"`;")
                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
                                  curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
 
