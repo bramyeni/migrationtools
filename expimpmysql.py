@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 570 2024-04-16 12:24:04Z bpahlawa $
+# $Id: expimpmysql.py 571 2024-04-16 12:27:00Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-16 20:24:04 +0800 (Tue, 16 Apr 2024) $
-# $Revision: 570 $
+# $Date: 2024-04-16 20:27:00 +0800 (Tue, 16 Apr 2024) $
+# $Revision: 571 $
 
 import re
 from string import *
@@ -1001,7 +1001,7 @@ def import_data():
        logging.info("Database "+impdatabase+" character set is : "+getcharset+" collation is : "+getcollation)
 
 
-    if (getcharset!=gicharsetorig):
+    if (getcharset!=getcharsetorig):
         logging.info("Source database original character set and collation is : "+getcharset+" "+getcollation)
         logging.info("Target database original character set and collation is : "+gicharsetorig+" "+gicollation)
         logging.info("Source and Target database must have the same character set and collation")
