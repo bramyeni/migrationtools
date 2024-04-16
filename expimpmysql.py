@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 567 2024-04-04 01:18:51Z bpahlawa $
+# $Id: expimpmysql.py 569 2024-04-16 08:03:11Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-04 09:18:51 +0800 (Thu, 04 Apr 2024) $
-# $Revision: 567 $
+# $Date: 2024-04-16 16:03:11 +0800 (Tue, 16 Apr 2024) $
+# $Revision: 569 $
 
 import re
 from string import *
@@ -459,7 +459,7 @@ def generate_create_view():
 
        fviewfile = open(expdatabase+"/"+crviewfilename,"w")
        for view_name in listofview:
-           curtblinfo.execute("show create view "+view_name)
+           curtblinfo.execute("show create view `"+view_name+"`")
            rows=curtblinfo.fetchall()
            for row in rows:
                fviewfile.write(row[1]+";\n")
@@ -521,7 +521,7 @@ def generate_create_trigger():
        trigfile = open(expdatabase+"/"+crtrigfilename,"w")
 
        for trigger_name in listoftrigger:  
-           curtblinfo.execute("show create trigger "+trigger_name)
+           curtblinfo.execute("show create trigger `"+trigger_name+"`")
            rows=curtblinfo.fetchall()
            for row in rows:
                trigfile.write(row[2]+";\n")
@@ -556,7 +556,7 @@ def generate_create_table(tablename):
     global curtblinfo
     global crtblfile
     try:
-       curtblinfo.execute(sqlcreatetable+" "+tablename)
+       curtblinfo.execute(sqlcreatetable+" `"+tablename+"`")
        rows=curtblinfo.fetchall()
 
        for row in rows:
@@ -708,7 +708,7 @@ def insert_data(tablename):
     global impconnection
     global impcursor
     cpy = StringIO()
-    thequery = "select * from " + tablename
+    thequery = "select * from `" + tablename + "`"
     try:     
        impcursor.execute(thequery)
        i=0
@@ -1327,7 +1327,7 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
 
        fileno=1
        
-       spcursor.execute("select * from "+tbldata)
+       spcursor.execute("select * from `"+tbldata+"`")
        totalproc+=1
        i=0
        rowcount=0
@@ -1440,7 +1440,7 @@ def spool_data(tbldata,expuser,exppass,expserver,expport,expcharset,expdatabase,
        logging.info("Spooling data to \033[1;34;40m"+expdatabase+"/"+tbldata+".csv.gz")
        
        f=pgzip.open(expdatabase+"/"+tbldata+".csv.gz","wt", thread=0)
-       spcursor.execute("select * from "+tbldata)
+       spcursor.execute("select * from `"+tbldata+"`")
        totalproc+=1
        i=0
        rowcount=0
