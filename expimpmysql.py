@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 574 2024-04-16 13:34:41Z bpahlawa $
+# $Id: expimpmysql.py 575 2024-04-16 13:55:53Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-16 21:34:41 +0800 (Tue, 16 Apr 2024) $
-# $Revision: 574 $
+# $Date: 2024-04-16 21:55:53 +0800 (Tue, 16 Apr 2024) $
+# $Revision: 575 $
 
 import re
 from string import *
@@ -1865,7 +1865,7 @@ def compare_database():
     with open(configfile, 'w') as cfgfile:
         config.write(cfgfile)
 
-    gicharcollation=gather_database_charset(impserver,impport,impdatabase,"SOURCE")
+    gicharcollation=gather_database_charset(impserver,impport,impdatabase,"TARGET")
     gicharsetorig=gicharcollation[0]
     gicharset=gicharsetorig
 
