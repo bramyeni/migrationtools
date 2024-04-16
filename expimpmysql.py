@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 573 2024-04-16 12:43:55Z bpahlawa $
+# $Id: expimpmysql.py 574 2024-04-16 13:34:41Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-16 20:43:55 +0800 (Tue, 16 Apr 2024) $
-# $Revision: 573 $
+# $Date: 2024-04-16 21:34:41 +0800 (Tue, 16 Apr 2024) $
+# $Revision: 574 $
 
 import re
 from string import *
@@ -1003,7 +1003,7 @@ def import_data():
 
     if (getcharset!=gicharset):
         logging.info("Source database original character set and collation is : "+getcharset+" "+getcollation)
-        logging.info("Target database original character set and collation is : "+gicharsetorig+" "+gicollation)
+        logging.info("Target database original character set and collation is : "+gicharset+" "+gicollation)
         logging.info("Source and Target database must have the same character set and collation")
         exit()
 
@@ -1975,6 +1975,11 @@ def set_params():
        i=1 
        while (read_config(cfgmode,'mysqlparam'+str(i))!=None):
            param=read_config(cfgmode,'mysqlparam'+str(i)).split(":")
+           setvars.append('set '+param[0]+' := '+param[1]+';')
+           i=i+1
+
+       while (read_config(cfgmode,'gmysqlparam'+str(i))!=None):
+           param=read_config(cfgmode,'gmysqlparam'+str(i)).split(":")
            setvars.append('set global '+param[0]+' := '+param[1]+';')
            i=i+1
     except Exception as error:
@@ -1986,9 +1991,27 @@ def get_params():
     global expconnection,cfgmode,impconnection
     oldvars=[]
     param=None
-    getquery="show global variables where variable_name in ("
     try:
+       getquery="show global variables where variable_name in ("
        i=1
+       while (read_config(cfgmode,'gmysqlparam'+str(i))!=None):
+           param=read_config(cfgmode,'gmysqlparam'+str(i)).split(":")
+           getquery=getquery+"'"+param[0]+"',"
+           i=i+1
+
+       if (param==None):
+           return(param)
+       getquery=getquery[:-1]+")"
+       if (cfgmode=='import'):
+           getcur=impconnection.cursor()
+       else:
+           getcur=expconnection.cursor()
+       getcur.execute(getquery)
+
+       for result in getcur.fetchall():
+           oldvars.append('set global '+result[0]+' := '+result[1])
+
+       getquery="show variables where variable_name in ("
        while (read_config(cfgmode,'mysqlparam'+str(i))!=None):
            param=read_config(cfgmode,'mysqlparam'+str(i)).split(":")
            getquery=getquery+"'"+param[0]+"',"
@@ -2002,8 +2025,11 @@ def get_params():
        else:
            getcur=expconnection.cursor()
        getcur.execute(getquery)
+
        for result in getcur.fetchall():
-           oldvars.append('set global '+result[0]+' := '+result[1])
+           oldvars.append('set '+result[0]+' := '+result[1])
+
+
     except Exception as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
     finally:
