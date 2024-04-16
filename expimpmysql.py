@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 569 2024-04-16 08:03:11Z bpahlawa $
+# $Id: expimpmysql.py 570 2024-04-16 12:24:04Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-16 16:03:11 +0800 (Tue, 16 Apr 2024) $
-# $Revision: 569 $
+# $Date: 2024-04-16 20:24:04 +0800 (Tue, 16 Apr 2024) $
+# $Revision: 570 $
 
 import re
 from string import *
@@ -978,29 +978,30 @@ def import_data():
         expdatabase=thedb
 
     gicharcollation=gather_database_charset(impserver,impport,impdatabase,"TARGET")
-    gicharsetorig=gicharcollation[0]
-    gicharset=gicharsetorig
+    gicharset=gicharcollation[0]
     gicollation=gicharcollation[1]
-
-    if (impconvcharset is not None):
-       if (gicharset==impconvcharset.split(":")[0]):
-           gicharset=impconvcharset.split(":")[1]
-           logging.info("Database "+impdatabase+" original character set is   : "+gicharsetorig+" collation is : "+gicollation)
-           logging.info("Database "+impdatabase+" character set is changed to : "+gicharset+" collation is : "+gicollation)
-       else:
-           logging.info("Database "+impdatabase+" character set is : "+gicharset+" collation is : "+gicollation)
-    else:
-       logging.info("Database "+impdatabase+" character set is : "+gicharset+" collation is : "+gicollation)
 
     #getting character set and collation from export data
     getcharsetfile = open(expdatabase+"/"+crcharset,"r")
     getcharcollation=getcharsetfile.read()
-    getcharset=getcharcollation.split(",")[0]
+    getcharsetorig=getcharcollation.split(",")[0]
+    getcharset=getcharsetorig
     getcollation=getcharcollation.split(",")[1]
     if (getcharsetfile):
        getcharsetfile.close()
 
-    if (getcharset!=gicharsetorig or getcollation!=gicollation):
+    if (impconvcharset is not None):
+       if (getcharset==impconvcharset.split(":")[0]):
+           getcharset=impconvcharset.split(":")[1]
+           logging.info("Database "+impdatabase+" original character set is   : "+getcharsetorig+" collation is : "+getcollation)
+           logging.info("Database "+impdatabase+" character set is changed to : "+getcharset)
+       else:
+           logging.info("Database "+impdatabase+" character set is : "+getcharset+" collation is : "+getcollation)
+    else:
+       logging.info("Database "+impdatabase+" character set is : "+getcharset+" collation is : "+getcollation)
+
+
+    if (getcharset!=gicharsetorig):
         logging.info("Source database original character set and collation is : "+getcharset+" "+getcollation)
         logging.info("Target database original character set and collation is : "+gicharsetorig+" "+gicollation)
         logging.info("Source and Target database must have the same character set and collation")
