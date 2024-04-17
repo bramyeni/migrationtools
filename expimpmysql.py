@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 577 2024-04-17 03:09:30Z bpahlawa $
+# $Id: expimpmysql.py 578 2024-04-17 03:15:08Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-17 11:09:30 +0800 (Wed, 17 Apr 2024) $
-# $Revision: 577 $
+# $Date: 2024-04-17 11:15:08 +0800 (Wed, 17 Apr 2024) $
+# $Revision: 578 $
 
 import re
 from string import *
@@ -1884,6 +1884,16 @@ def get_all_variables():
     logging.info("Admin User/Host \033[1;34;40m"+tuser+"@"+impserver+"\033[1;37;40m is connected to the Target Database")
     logging.info("Retrieving and comparing all variables from these instances...")
     logging.info("Any variables that has different values will be written and also if the target database's value < source databse's value...")
+
+    #Create directory to spool all export files
+    try:
+       #directory name is source databasename
+       os.mkdir("mysql", 0o755 )
+    except FileExistsError as exists:
+       pass
+    except Exception as logerr:
+       logging.error("\033[1;31;40mError occured :"+str(logerr))
+       sys.exit(2)
 
     try:
        queryvars="show global variables"
