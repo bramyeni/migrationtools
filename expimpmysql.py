@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 575 2024-04-16 13:55:53Z bpahlawa $
+# $Id: expimpmysql.py 577 2024-04-17 03:09:30Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-16 21:55:53 +0800 (Tue, 16 Apr 2024) $
-# $Revision: 575 $
+# $Date: 2024-04-17 11:09:30 +0800 (Wed, 17 Apr 2024) $
+# $Revision: 577 $
 
 import re
 from string import *
@@ -46,6 +46,8 @@ GreenH='\033[7;49;92m'
 BlueH='\033[7;49;34m'
 WhiteH='\033[7;49;39m'
 
+#always exclude the following databases
+excludedb=["information_schema","performance_schema","sys","mysql"]
 #sql assessment
 sqlassess = """"SELECT user, host FROM mysql.user WHERE host LIKE '%\%%'"
 "SELECT @@global.sql_mode"
@@ -490,7 +492,7 @@ def generate_create_proc_and_func():
            rows=curtblinfo.fetchall()
            for row in rows:
                if (row[2]==None):
-                   logging.info("missing privilege \"grant select on mysql.proc to thisuser\", skipping create procedure and function...")
+                   logging.info("missing privilege \"grant select on mysql.proc to this user\", skipping create procedure and function...")
                    fprocfuncfile.close()
                    return
                    
@@ -922,6 +924,7 @@ def usage():
     print("   -d, --dbinfo  -t, --db-list=  Gather Database Info (all|list|db1,db2,dbN)")
     print("   -a, --all-info                Gather All Information From information_schema")
     print("   -c, --db-compare              Compare Database")
+    print("   -o, --clone-variables         Clone Variables from a Source to a Target Database")
     print("   -l, --log=                    INFO|DEBUG|WARNING|ERROR|CRITICAL\n")
 
 def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
@@ -1595,7 +1598,10 @@ def check_databases(dblist,auser,apass,aserver,aport,gecharset,aca):
            acursor.execute("SHOW DATABASES")
            alldbs=acursor.fetchall()
            for thedb in alldbs:
-               check_databases(thedb,auser,checkpass,aserver,aport,gecharset,aca)
+               if (thedb[0] in excludedb):
+                   continue
+               else:
+                   check_databases(thedb[0],auser,checkpass,aserver,aport,gecharset,aca)
 
        except (Exception,pymysql.Error) as error:
            logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
@@ -1799,6 +1805,126 @@ def gather_database_charset(lserver,lport,ldatabase,targetdb,**kwargs):
           lconn.close()
        return(lqueryresult[0][1],lqueryresult[1][1])
 
+def get_all_variables():
+    global expconnection,cfgmode,impconnection
+    sallvars={}
+    tallvars={}
+    expserver = read_config('export','servername')
+    expport = read_config('export','port')
+    expca = read_config('export','sslca')
+    expuser = read_config('export','username')
+    exppass = read_config('export','password')
+    if (exppass==''):
+       exppass=' ';
+    exppass=decode_password(exppass)
+
+    suser=input('Enter admin username@'+expserver+' :')
+    if (suser!=expuser):
+       spass=getpass.getpass('Enter Password for '+suser+' :').replace('\b','')
+       while test_connection(suser,spass,expserver,expport,'mysql',expca)==1:
+           spass=getpass.getpass('Enter Password for '+suser+' :').replace('\b','')
+    else:
+       spass=exppass
+       while test_connection(suser,spass,expserver,expport,'mysql',expca)==1:
+           spass=getpass.getpass('Enter Password for '+suser+' :').replace('\b','')
+       obfuscatedpass=encode_password(spass)
+       config.set("export","password",obfuscatedpass)
+       with open(configfile, 'w') as cfgfile:
+           config.write(cfgfile)
+
+    impserver = read_config('import','servername')
+    impport = read_config('import','port')
+    impca = read_config('import','sslca')
+    impuser = read_config('import','username')
+    imppass = read_config('import','password')
+    if (imppass==''):
+       imppass=' ';
+    imppass=decode_password(imppass)
+
+    tuser=input('Enter admin username@'+impserver+' :')
+    if (tuser!=impuser):
+       tpass=getpass.getpass('Enter Password for '+tuser+' :').replace('\b','')
+       while test_connection(tuser,tpass,impserver,impport,'mysql',impca)==1:
+           tpass=getpass.getpass('Enter Password for '+tuser+' :').replace('\b','')
+    else:
+       tpass=imppass
+       while test_connection(tuser,tpass,impserver,impport,'mysql',impca)==1:
+           tpass=getpass.getpass('Enter Password for '+tuser+' :').replace('\b','')
+       obfuscatedpass=encode_password(tpass)
+       config.set("import","password",obfuscatedpass)
+       with open(configfile, 'w') as cfgfile:
+           config.write(cfgfile)
+
+    try:
+       sconn = pymysql.connect(user=suser,
+                           password=spass,
+                           host=expserver,
+                           port=int(expport),
+                           charset='utf8',
+                           ssl_ca=expca,
+                           database='mysql')
+
+       tconn = pymysql.connect(user=tuser,
+                           password=tpass,
+                           host=impserver,
+                           port=int(impport),
+                           charset='utf8',
+                           ssl_ca=impca,
+                           database='mysql')
+
+    except (Exception,pymysql.Error) as error:
+        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+        if (sconn):
+            sconn.close()
+        if (tconn):
+            tconn.close()
+        exit(2)
+
+    logging.info("Admin User/Host \033[1;34;40m"+suser+"@"+expserver+"\033[1;37;40m is connected to the Source Database")
+    logging.info("Admin User/Host \033[1;34;40m"+tuser+"@"+impserver+"\033[1;37;40m is connected to the Target Database")
+    logging.info("Retrieving and comparing all variables from these instances...")
+    logging.info("Any variables that has different values will be written and also if the target database's value < source databse's value...")
+
+    try:
+       queryvars="show global variables"
+       scursor=sconn.cursor()
+       scursor.execute(queryvars)
+       alltbls=scursor.fetchall()
+
+       for tbl in alltbls:
+           sallvars[tbl[0]]=tbl[1]
+
+       tcursor=tconn.cursor()
+       tcursor.execute(queryvars)
+       alltbls=tcursor.fetchall()
+
+       for tbl in alltbls:
+           tallvars[tbl[0]]=tbl[1]
+
+       vfile=open("mysql/SET_GLOBAL_VARIABLES.sql", 'wt')
+
+       for tbl in tallvars:
+           if tbl not in sallvars.keys():
+               continue
+           if (sallvars[tbl]==tallvars[tbl]):
+               continue
+           if (sallvars[tbl]<tallvars[tbl]):
+               continue
+
+           sqlcmd="SET GLOBAL "+tbl+" := '"+str(sallvars[tbl])+"'; # SOURCE: '"+str(tallvars[tbl])+"'"
+           logging.info(sqlcmd)
+           vfile.write(sqlcmd+"\n")
+       vfile.close()
+
+
+    except (Exception,pymysql.Error) as error:
+        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+        if (sconn):
+            sconn.close()
+        if (tconn):
+            tconn.close()
+        exit()
+
 def compare_database():
     expserver = read_config('export','servername')
     expport = read_config('export','port')
@@ -1987,6 +2113,7 @@ def set_params():
     finally:
        return(setvars)
 
+
 def get_params():
     global expconnection,cfgmode,impconnection
     oldvars=[]
@@ -1999,35 +2126,38 @@ def get_params():
            getquery=getquery+"'"+param[0]+"',"
            i=i+1
 
-       if (param==None):
-           return(param)
-       getquery=getquery[:-1]+")"
-       if (cfgmode=='import'):
-           getcur=impconnection.cursor()
-       else:
-           getcur=expconnection.cursor()
-       getcur.execute(getquery)
+       if (param!=None):
+           getquery=getquery[:-1]+")"
+           if (cfgmode=='import'):
+              getcur=impconnection.cursor()
+           else:
+              getcur=expconnection.cursor()
+           getcur.execute(getquery)
 
-       for result in getcur.fetchall():
-           oldvars.append('set global '+result[0]+' := '+result[1])
+           for result in getcur.fetchall():
+              oldvars.append('set global '+result[0]+' := '+result[1])
 
+       param=None
        getquery="show variables where variable_name in ("
+
        while (read_config(cfgmode,'mysqlparam'+str(i))!=None):
            param=read_config(cfgmode,'mysqlparam'+str(i)).split(":")
            getquery=getquery+"'"+param[0]+"',"
            i=i+1
        
-       if (param==None):
-           return(param)
-       getquery=getquery[:-1]+")"
-       if (cfgmode=='import'):
-           getcur=impconnection.cursor()
-       else:
-           getcur=expconnection.cursor()
-       getcur.execute(getquery)
+       if (param==None and oldvars==[]):
+           return(None)
 
-       for result in getcur.fetchall():
-           oldvars.append('set '+result[0]+' := '+result[1])
+       if (param!=None):
+           getquery=getquery[:-1]+")"
+           if (cfgmode=='import'):
+              getcur=impconnection.cursor()
+           else:
+              getcur=expconnection.cursor()
+           getcur.execute(getquery)
+
+           for result in getcur.fetchall():
+              oldvars.append('set '+result[0]+' := '+result[1])
 
 
     except Exception as error:
@@ -2244,7 +2374,7 @@ def main():
     #initiate signal handler, it will capture if user press ctrl+c key, the program will terminate
     handler = signal.signal(signal.SIGINT, trap_signal)
     try:
-       opts, args=getopt.getopt(sys.argv[1:], "hl:eEisvdt:ac", ["help","log=","export-to-client","export-to-server","import","script","dbinfo","db-list=","all-info","db-compare"])
+       opts, args=getopt.getopt(sys.argv[1:], "hl:eEisvdt:aco", ["help","log=","export-to-client","export-to-server","import","script","dbinfo","db-list=","all-info","db-compare","clone-variables"])
     except (Exception,getopt.GetoptError) as error:
        logging.error("\n\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        usage()
@@ -2290,6 +2420,8 @@ def main():
                mode = "dblist"
         elif o in ("-a","--all-info"):
             mode = "allinfo"
+        elif o in ("-o","--clone-variables"):
+            mode = "clonevar"
         elif o in ("-c","--db-compare"):
             mode = "dbcompare"
         else:
@@ -2353,6 +2485,9 @@ def main():
        elif mode=="dbcompare":
           logging.info("Comparing schema/database......")
           compare_database()
+       elif mode=="clonevar":
+          logging.info("Cloning variables from source to target database......")
+          get_all_variables()
        else:
           sys.exit()
 
