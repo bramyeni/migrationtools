@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 580 2024-04-17 03:45:13Z bpahlawa $
+# $Id: expimpmysql.py 581 2024-04-17 04:04:16Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-17 11:45:13 +0800 (Wed, 17 Apr 2024) $
-# $Revision: 580 $
+# $Date: 2024-04-17 12:04:16 +0800 (Wed, 17 Apr 2024) $
+# $Revision: 581 $
 
 import re
 from string import *
@@ -1918,15 +1918,15 @@ def get_all_variables():
                continue
            if (sallvars[tbl]==tallvars[tbl]):
                continue
-           elif (sallvars[tbl]!=tallvars[tbl]):
-               if sallvars[tbl].isdigit() and tallvars[tbl].isdigit():
+           elif (sallvars[tbl]!=tallvars[tbl] and sallvars[tbl]!=""):
+               if (sallvars[tbl].isdigit() and tallvars[tbl].isdigit()):
                    i=int(sallvars[tbl])
                    j=int(tallvars[tbl])
                    if (i<j):
                       continue
-               elif (sallvars[tbl]=="" and tallvars[tbl]!=""):
+               elif (sallvars[tbl].find('\\')==tallvars[tbl].find('\/')):
                    continue
-               elif (sallvars[tbl].find(':\\')==tallvars[tbl].find('/')):
+               elif (sallvars[tbl].find('\/')==tallvars[tbl].find('\\')):
                    continue
 
            sqlcmd="SET GLOBAL "+tbl+" := '"+str(sallvars[tbl])+"'; # current value : '"+str(tallvars[tbl])+"'"
