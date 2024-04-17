@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 578 2024-04-17 03:15:08Z bpahlawa $
+# $Id: expimpmysql.py 579 2024-04-17 03:36:56Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-17 11:15:08 +0800 (Wed, 17 Apr 2024) $
-# $Revision: 578 $
+# $Date: 2024-04-17 11:36:56 +0800 (Wed, 17 Apr 2024) $
+# $Revision: 579 $
 
 import re
 from string import *
@@ -1916,12 +1916,18 @@ def get_all_variables():
        for tbl in tallvars:
            if tbl not in sallvars.keys():
                continue
-           if (sallvars[tbl]==tallvars[tbl]):
+           elif (sallvars[tbl]==tallvars[tbl]):
                continue
-           if (sallvars[tbl]<tallvars[tbl]):
-               continue
+           elif (sallvars[tbl]!=tallvars[tbl]):
+               if sallvars[tbl].isdigit() and tallvars[tbl].isdigit():
+                   i=int(sallvars[tbl])
+                   j=int(tallvars[tbl])
+                   if (i<j):
+                      continue
+               elif (sallvars[tbl]=="" and tallvars[tbl]!=""):
+                   continue
 
-           sqlcmd="SET GLOBAL "+tbl+" := '"+str(sallvars[tbl])+"'; # SOURCE: '"+str(tallvars[tbl])+"'"
+           sqlcmd="SET GLOBAL "+tbl+" := '"+str(sallvars[tbl])+"'; # current value : '"+str(tallvars[tbl])+"'"
            logging.info(sqlcmd)
            vfile.write(sqlcmd+"\n")
        vfile.close()
