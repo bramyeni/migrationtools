@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 582 2024-04-18 05:24:21Z bpahlawa $
+# $Id: expimpmysql.py 583 2024-04-18 05:52:34Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-18 13:24:21 +0800 (Thu, 18 Apr 2024) $
-# $Revision: 582 $
+# $Date: 2024-04-18 13:52:34 +0800 (Thu, 18 Apr 2024) $
+# $Revision: 583 $
 
 import re
 from string import *
@@ -1020,7 +1020,7 @@ def import_data():
         impalldb.append(impdatabase)
         
 
-    if (impexcludedb!=None):
+    if (impexcludedb!=None and impexcludedb!=""):
        if (len(impexcludedb.split(","))>1):
           for dblist in impexcludedb.split(","):
              impalldb.remove(dblist)
@@ -2340,7 +2340,7 @@ def export_data(**kwargs):
     alldbs=check_databases(expdatabase,expuser,exppass,expserver,expport,None,expca)
     exppass = decode_password(read_config('export','password'))
 
-    if (expexcludedb!=None):
+    if (expexcludedb!=None and expexcludedb!=""):
        if (len(expexcludedb.split(","))>1):
           for dblist in expexcludedb.split(","):
              alldbs.remove(dblist)
@@ -2359,7 +2359,8 @@ def export_data(**kwargs):
                     shutil.rmtree(expdatabase)
                 else:
                     logging.info("Exported files for database "+Yellow+expdatabase+Green+" exist, skipping export..")
-                    continue
+                    if (mode!="script"):
+                       continue
             else:
                 logging.info("Some files exist on directory "+expdatabase+", Re-exporting..")
         
@@ -2661,6 +2662,7 @@ def main():
           logging.info("Exporting data to a server......")
           export_data(spool='toserver')
        elif mode=="script":
+          cfgmode='export'
           logging.info("Generating database scripts......")
           export_data()
        elif mode=="dbinfo":
