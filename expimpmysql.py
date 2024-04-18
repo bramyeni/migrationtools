@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 587 2024-04-18 11:35:56Z bpahlawa $
+# $Id: expimpmysql.py 588 2024-04-18 12:02:41Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-18 19:35:56 +0800 (Thu, 18 Apr 2024) $
-# $Revision: 587 $
+# $Date: 2024-04-18 20:02:41 +0800 (Thu, 18 Apr 2024) $
+# $Revision: 588 $
 
 import re
 from string import *
@@ -1350,13 +1350,13 @@ def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdat
        if (spooldir[1]!=""):
 
           expquery="""select * INTO OUTFILE '{0}'
-   FIELDS TERMINATED BY '"+sep1+"' 
-   OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"'
-   LINES TERMINATED BY '"+eol+crlf+"'
+   FIELDS TERMINATED BY '{2}' 
+   OPTIONALLY ENCLOSED BY '{3}' ESCAPED BY '{4}'
+   LINES TERMINATED BY '{5}'
    FROM {1};
 """
           logging.info(mprocessid+" Start spooling data on a server from table \033[1;34;40m"+tblname+"\033[1;37;40m into \033[1;34;40m"+spooldir[1]+tblname+".csv")
-          spcursor.execute(expquery.format(spooldir[1]+tblname+".csv",tblname))
+          spcursor.execute(expquery.format(spooldir[1]+tblname+".csv",tblname,sep1,quote,esc,eol+crlf))
           qresult=spcursor.fetchall() 
           logging.info(mprocessid+" Finish spooling table : "+tblname+" into "+spooldir[1]+tblname+".csv")
 
