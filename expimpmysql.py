@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 583 2024-04-18 05:52:34Z bpahlawa $
+# $Id: expimpmysql.py 584 2024-04-18 06:19:03Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-18 13:52:34 +0800 (Thu, 18 Apr 2024) $
-# $Revision: 583 $
+# $Date: 2024-04-18 14:19:03 +0800 (Thu, 18 Apr 2024) $
+# $Revision: 584 $
 
 import re
 from string import *
@@ -584,10 +584,12 @@ def generate_create_table(tablename):
        rows=curtblinfo.fetchall()
 
        for row in rows:
-          charset=re.findall("ENGINE.*CHARSET=(.*) COLLATE=.*$",row[1])
           crtblfile.write(row[1]+";\n")
-          tblcharset[row[0]]=charset[0]
-   
+          if (row[1].find("CHARSET=utf8")!=-1):
+             tblcharset[row[0]]="utf8"
+          elif (row[1].find("CHARSET=latin")!=-1):
+             tblcharset[row[0]]="latin"
+
     except (Exception,pymysql.Error) as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        pass
