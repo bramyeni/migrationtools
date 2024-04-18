@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 581 2024-04-17 04:04:16Z bpahlawa $
+# $Id: expimpmysql.py 582 2024-04-18 05:24:21Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-17 12:04:16 +0800 (Wed, 17 Apr 2024) $
-# $Revision: 581 $
+# $Date: 2024-04-18 13:24:21 +0800 (Thu, 18 Apr 2024) $
+# $Revision: 582 $
 
 import re
 from string import *
@@ -119,6 +119,8 @@ sOI=" "
 dtnow=None
 #Character set and collation of source database
 crcharset='charcollation.info'
+#database script's filename
+crdbfilename='crdatabase-mysql.sql'
 #foreign key script's filename
 crfkeyfilename='crforeignkeys-mysql.sql'
 #other key script's filename
@@ -230,6 +232,9 @@ sqllisttables="show full tables where table_type='BASE TABLE'"
 
 #Statement for creating table
 sqlcreatetable="show create table"
+
+#Statement for creating database
+sqlcreatedatabase="show create database"
 
 #List name of tables and their sizes
 sqltableinfo="""select table_name,round(((data_length + index_length) / 1024 / 1024), 2) rowsz 
@@ -552,17 +557,36 @@ def generate_create_okey():
     finally:
        if (okeyfile):
           okeyfile.close() 
-       
+
+#procedure to generate database creation script
+def generate_create_database(databasename):
+    global curtblinfo
+    try:
+       curtblinfo.execute(sqlcreatedatabase+" `"+databasename+"`")
+       rows=curtblinfo.fetchall()
+
+       crdbfile = open(expdatabase+"/"+crdbfilename,"w")
+       for row in rows:
+          charset=re.findall("(CREATE DATABASE .*)/.*(DEFAULT.*) \*.*",row[1])
+          crdbfile.write(charset[0][0]+charset[0][1]+";\n")
+       crdbfile.close()
+   
+    except (Exception,pymysql.Error) as error:
+       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+       pass
+
 #procedure to generate tables creation script
 def generate_create_table(tablename):
-    global curtblinfo
+    global curtblinfo,tblcharset
     global crtblfile
     try:
        curtblinfo.execute(sqlcreatetable+" `"+tablename+"`")
        rows=curtblinfo.fetchall()
 
        for row in rows:
+          charset=re.findall("ENGINE.*CHARSET=(.*) COLLATE=.*$",row[1])
           crtblfile.write(row[1]+";\n")
+          tblcharset[row[0]]=charset[0]
    
     except (Exception,pymysql.Error) as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
@@ -570,13 +594,13 @@ def generate_create_table(tablename):
 
 #procedure to create table
 def create_table():
-    global impconnection,expdatabase
+    global impconnection,impdatabase
     curcrtable=impconnection.cursor()
     createtable=""
     crtblfailed=[]
     logging.info("Creating tables from the script")
     try:
-       fcrtable = open(expdatabase+"/"+crtblfilename,"r")
+       fcrtable = open(impdatabase+"/"+crtblfilename,"r")
        curcrtable.execute("SET FOREIGN_KEY_CHECKS=0;")
        for line in fcrtable.readlines():
           if line.find(";") != -1:
@@ -608,12 +632,12 @@ def create_table():
 
 #procedure to create table's keys
 def create_table_keys():
-    global impconnection,expdatabase
+    global impconnection,impdatabase
     curcrtablekeys=impconnection.cursor()
     createtablekeys=""
     logging.info("Creating table's KEYs from the script")
     try:
-       fcrokey = open(expdatabase+"/"+crokeyfilename,"r")
+       fcrokey = open(impdatabase+"/"+crokeyfilename,"r")
        for line in fcrokey.readlines():
           if line.find(");"):
              try:
@@ -639,12 +663,12 @@ def create_table_keys():
 
 #procedure to create sequences
 def create_sequences():
-    global impconnection,expdatabase
+    global impconnection,impdatabase
     curcrsequences=impconnection.cursor()
     createsequences=""
     logging.info("Creating sequences from the script")
     try:
-       crseqs = open(expdatabase+"/"+crseqfilename,"r")
+       crseqs = open(impdatabase+"/"+crseqfilename,"r")
        for line in crseqs.readlines():
           if line.find(");"):
              try:
@@ -667,12 +691,12 @@ def create_sequences():
 
 #procedure to re-create foreign keys from the generated script
 def recreate_fkeys():
-    global impconnection,expdatabase
+    global impconnection,impdatabase
     curfkeys=impconnection.cursor()
     createfkeys=""
     logging.info("Re-creating table's FOREIGN KEYs from the script")
     try:
-       fcrfkey = open(expdatabase+"/"+crfkeyfilename,"r")
+       fcrfkey = open(impdatabase+"/"+crfkeyfilename,"r")
        for line in fcrfkey.readlines():
           if line.find(");"):
              try:
@@ -919,6 +943,7 @@ def usage():
     os.path.basename(__file__) + " [OPTIONS]\nGeneral Options:")
     print("   -e, --export-to-client        Export using Client Code")
     print("   -E, --export-to-server        Export using Server Mode (very fast)")
+    print("   -f, --force-export            Remove previous exported directory and its files")
     print("   -i, --import                  Import Mode")
     print("   -s, --script                  Generate Scripts")
     print("   -d, --dbinfo  -t, --db-list=  Gather Database Info (all|list|db1,db2,dbN)")
@@ -951,18 +976,19 @@ def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
           if(impconnection): impconnection.close()
           exit(1)
        else:
-          logging.info("\033[1;31;40mOther Error occurred: "+str(logerr))
+          logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(logerr)+" line# : "+str(logerr.__traceback__.tb_lineno))
           return(1)
     
 
 #procedure to import data
 def import_data():
-    global imptables,config,configfile,curimptbl,expdatabase,gicharset,improwchunk,implocktimeout,sharedvar,resultlist,impoldvars
+    global imptables,config,configfile,curimptbl,gicharset,improwchunk,implocktimeout,sharedvar,resultlist,impoldvars,retdblist,impdatabase
     #Loading import configuration from mysqlconfig.ini file
     impserver = read_config('import','servername')
     impport = read_config('import','port')
     impdatabase = read_config('import','database')
-    expdatabase = read_config('export','database')
+    imprenamedb = read_config('import','renamedb')
+    impexcludedb = read_config('import','excludedb')
     improwchunk = read_config('import','rowchunk')
     implocktimeout = read_config('import','locktimeout')
     impparallel = int(read_config('import','parallel'))
@@ -970,295 +996,335 @@ def import_data():
     impca = read_config('import','sslca')
     impconvcharset = read_config('import','convertcharset')
     thedb=" "
-    logging.info("\033[1;33mTarget database is : "+impdatabase)
-
-
-    if (len(expdatabase.split(","))>1):
-        logging.info("Found multiple source databases!")
-        while (thedb not in expdatabase or thedb == "" ):
-            logging.info("\033[1;33mWhich database {} ? : ".format(expdatabase))
-            thedb = input(">>>>>> Enter Database : << ")
-        expdatabase=thedb
-
-    gicharcollation=gather_database_charset(impserver,impport,impdatabase,"TARGET")
-    gicharset=gicharcollation[0]
-    gicollation=gicharcollation[1]
-
-    #getting character set and collation from export data
-    getcharsetfile = open(expdatabase+"/"+crcharset,"r")
-    getcharcollation=getcharsetfile.read()
-    getcharsetorig=getcharcollation.split(",")[0]
-    getcharset=getcharsetorig
-    getcollation=getcharcollation.split(",")[1]
-    if (getcharsetfile):
-       getcharsetfile.close()
-
-    if (impconvcharset is not None):
-       if (getcharset==impconvcharset.split(":")[0]):
-           getcharset=impconvcharset.split(":")[1]
-           logging.info("Database "+impdatabase+" original character set is   : "+getcharsetorig+" collation is : "+getcollation)
-           logging.info("Database "+impdatabase+" character set is changed to : "+getcharset)
-       else:
-           logging.info("Database "+impdatabase+" character set is : "+getcharset+" collation is : "+getcollation)
-    else:
-       logging.info("Database "+impdatabase+" character set is : "+getcharset+" collation is : "+getcollation)
-
-
-    if (getcharset!=gicharset):
-        logging.info("Source database original character set and collation is : "+getcharset+" "+getcollation)
-        logging.info("Target database original character set and collation is : "+gicharset+" "+gicollation)
-        logging.info("Source and Target database must have the same character set and collation")
-        exit()
-
-
     impuser = read_config('import','username')
     imppass = read_config('import','password')
     imppass=decode_password(imppass)
-    impsetvars=set_params()
 
-    logging.info("Importing Data to Database: "+impdatabase+" Server: "+impserver+":"+impport+" username: "+impuser)
+    impalldb=[]
+    retdblist=[]
 
-    logging.info("Verifying")
-
-    global sqllisttables
-    global sqltablesizes
-    global impconnection
-    try:
-       impconnection = pymysql.connect(user=impuser,
-                                        password=imppass,
-                                        host=impserver,
-                                        port=int(impport),
-                                        charset=gicharset,
-                                        ssl_ca=impca,
-                                        database=impdatabase)
-
-    except (Exception,pymysql.Error) as error:
-       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-
-    try:
-       curimptbl = impconnection.cursor()
-
-       impoldvars=get_params()
-
-       for impsetvar in impsetvars:
-           try:
-              logging.info("Executing "+impsetvar)
-              curimptbl.execute(impsetvar)
-           except (Exception,pymysql.Error) as error:
-              if (str(error).find("Access denied")!=-1):
-                  logging.info("\033[1;33;40m>>>> Setting global variable must require SUPER or SYSTEM_VARIABLES_ADMIN privileges")
-                  logging.info("\033[1;33;40m>>>> GRANT SYSTEM_VARIABLES_ADMIN on *.* to "+impuser+";")
-              else:
-                  logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-
-       create_table()
-
-       #create_table_keys()
-
-       listofdata=[]
-
-       curimptbl.execute(sqllisttables)
-       rows = curimptbl.fetchall()
-     
-       for row in rows:
-          if imptables=="all":
-              if os.path.isfile(expdatabase+"/"+row[0]+".csv"):
-                 slicefiletot=0
-                 logging.info("Comparing total rows within file \033[1;34;40m"+expdatabase+"/"+row[0]+".csv"+"\033[1;32;40m and total rows within sliced files are in progress\033[1;37;40m")
-
-                 origfiletot=rawincountreg(expdatabase+"/"+row[0]+".csv") 
-                 ctlines = os.popen("zcat "+expdatabase+"/"+row[0]+".*.csv.gz 2>/dev/null | wc -l")
-                 slicefiletot = int(ctlines.read())
-
-                 if (origfiletot!=slicefiletot):
-                     logging.info("Total rows within sliced files "+expdatabase+"/"+row[0]+".*.csv.gz"+" : "+str(slicefiletot))
-                     logging.info("Total rows within regular file "+expdatabase+"/"+row[0]+".csv"+" : "+str(origfiletot))
-                     slice_file(expdatabase,row[0])
-                 else:
-                     logging.info("Total no of rows is the same")
-
-                 if not os.path.isfile(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
-                    logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                    curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                    curimptbl.execute("truncate table `"+row[0]+"`;")
-                    curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                    curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-                 else:
-                    with open(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
-                        exprowchunk = read_config('export','rowchunk')
-                        if (flagfile.readlines()[0]==str(exprowchunk)):
-                           logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                        else:
-                           logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
-                           for file2del in glob.glob(expdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
-                               if os.path.isfile(file2del): os.remove(file2del)
-                           logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                           curimptbl.execute("truncate table `"+row[0]+"`;")
-                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                           curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-
-                 listofdata.append(row[0])
-                 for slicetbl in sorted(glob.glob(expdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
-                     listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
-
-              elif os.path.isfile(expdatabase+"/"+row[0]+".1.csv.gz"):
-                 if not os.path.isfile(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
-                    logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                    curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                    curimptbl.execute("truncate table `"+row[0]+"`;")
-                    curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                    curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-                 else:
-                    with open(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
-                        exprowchunk = read_config('export','rowchunk')
-                        if (flagfile.readlines()[0]==str(exprowchunk)):
-                           logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                        else:
-                           logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
-                           for file2del in glob.glob(expdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
-                               if os.path.isfile(file2del): os.remove(file2del)
-                           logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                           curimptbl.execute("truncate table `"+row[0]+"`;")
-                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                           curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-
-
-                 listofdata.append(row[0])
-                 for slicetbl in sorted(glob.glob(expdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
-                     listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
-
-              else:
-                 logging.info("File "+expdatabase+"/"+row[0]+".csv.gz or "+expdatabase+"/"+row[0]+".csv doesnt exist")
-          else:
-              selectedtbls=imptables.split(",")
-              for selectedtbl in selectedtbls:
-                  if selectedtbl!=row[0]:
-                     continue
-                  else:
-                     if os.path.isfile(expdatabase+"/"+row[0]+".csv"):
-                        slicefiletot=0
-                        logging.info("Comparing total rows within file \033[1;34;40m"+expdatabase+"/"+row[0]+".csv"+"\033[1;32;40m and total rows within sliced files are in progress\033[1;37;40m")
-                        origfiletot=rawincountreg(expdatabase+"/"+row[0]+".csv")
-                        ctlines = os.popen("zcat "+expdatabase+"/"+row[0]+".*.csv.gz 2>/dev/null | wc -l")
-                        slicefiletot = int(ctlines.read())
-   
-                        if (origfiletot!=slicefiletot):
-                           logging.info("Total rows within sliced files "+expdatabase+"/"+row[0]+".*.csv.gz"+" : "+str(slicefiletot))
-                           logging.info("Total rows within regular file "+expdatabase+"/"+row[0]+".csv"+" : "+str(origfiletot))
-                           slice_file(expdatabase,row[0])
-                        else:
-                           logging.info("Total no of rows is the same")
-
-                        if not os.path.isfile(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
-                           logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                           curimptbl.execute("truncate table `"+row[0]+"`;")
-                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                           curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-                        else:
-                           with open(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
-                              exprowchunk = read_config('export','rowchunk')
-                              if (flagfile.readlines()[0]==str(exprowchunk)):
-                                  logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                              else:
-                                  logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
-                                  for file2del in glob.glob(expdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
-                                      if os.path.isfile(file2del): os.remove(file2del)
-                                  logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                                  curimptbl.execute("truncate table `"+row[0]+"`;")
-                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                                  curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-
-                        listofdata.append(row[0])
-                        for slicetbl in sorted(glob.glob(expdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
-                            listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
-
-   
-                     elif os.path.isfile(expdatabase+"/"+row[0]+".1.csv.gz"):
-                        if not os.path.isfile(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
-                           logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                           curimptbl.execute("truncate table `"+row[0]+"`;")
-                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                           curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-                        else:
-                           with open(expdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
-                              exprowchunk = read_config('export','rowchunk')
-                              if (flagfile.readlines()[0]==str(exprowchunk)):
-                                 logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                              else:
-                                 logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
-                                 for file2del in glob.glob(expdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
-                                    if os.path.isfile(file2del): os.remove(file2del)
-                                 logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                                 curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                                 curimptbl.execute("truncate table `"+row[0]+"`;")
-                                 curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                                 curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-
-                        listofdata.append(row[0])
-                        for slicetbl in sorted(glob.glob(expdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
-                            listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
-
-                     else:
-                        logging.info("File "+expdatabase+"/"+row[0]+".csv.gz or "+expdatabase+"/"+row[0]+".csv doesnt exist")
-
-       impconnection.commit()
-       impconnection.close()
-
-       sharedvar=mproc.Value('i',0)
-       resultlist=mproc.Manager().list()
-       sharedvar.value=0
-
-       with mproc.Pool(processes=impparallel) as importpool:
-          multiple_results = [importpool.apply_async(insert_data_from_file, args=(tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,expdatabase,impca),callback=cb) for tbldata in listofdata]
-          importpool.close()
-          importpool.join()
-          [res.get() for res in multiple_results]
-      
-
-       with mproc.Pool(processes=impparallel) as importpool:
-          multiple_results = [importpool.apply_async(verify_data, (tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,expdatabase,impca)) for tbldata in listofdata]
-          importpool.close()
-          importpool.join()
-          [res.get() for res in multiple_results]
-
-       impconnection = pymysql.connect(user=impuser,
-                                        password=imppass,
-                                        host=impserver,
-                                        port=int(impport),
-                                        charset=gicharset,
-                                        ssl_ca=impca,
-                                        database=impdatabase)
-
-       curimptbl = impconnection.cursor()
-       #recreate_fkeys()
-       #create_sequences()
-       for rslt in resultlist:
-          logging.info(rslt) 
+    if (len(impdatabase.split(","))>1):
+        for dblist in impdatabase.split(","):
+           if (glob.glob(dblist+"/*.gz")!=[] and glob.glob(dblist+"/*.sql")!=[]):
+              impalldb.append(dblist)
+           else:
+              logging.info("Exported files for database "+Yellow+dblist+Green+" are not complete, consider re-exporting..")
+    elif impdatabase=="all":
+        if (glob.glob("*/*.gz")!=[] and glob.glob("*/*.sql")!=[]):
+            thesqlfile=glob.glob("*/"+crdbfilename)
+            for filelst in thesqlfile:
+                impalldb.append(os.path.dirname(filelst))
+        else:
+           logging.info("Exported files are not complete, consider re-exporting..")
+    else:
+        impalldb.append(impdatabase)
         
-       for impoldvar in impoldvars:
-           try:
-              logging.info("Executing "+impoldvar)
-              curimptbl.execute(impoldvar)
-           except (Exception,pymysql.Error) as error:
-              if (str(error).find("Access denied")!=-1):
-                  logging.info("\033[1;33;40m>>>> Setting global variable must require SUPER or SYSTEM_VARIABLES_ADMIN privileges")
-                  logging.info("\033[1;33;40m>>>> GRANT SYSTEM_VARIABLES_ADMIN on *.* to "+impuser+";")
-              else:
-                  logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
 
-    except (Exception,pymysql.Error) as error:
-          logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-   
-    finally:
-       if(impconnection):
-          curimptbl.close()
-          impconnection.close()
-          logging.error("\033[1;37;40mDatabase import connections are closed")
+    if (impexcludedb!=None):
+       if (len(impexcludedb.split(","))>1):
+          for dblist in impexcludedb.split(","):
+             impalldb.remove(dblist)
+       else:
+          impalldb.remove(impexcludedb)
+
+    for impdatabase in impalldb: 
+        logging.info("\033[1;33mTarget database is : "+impdatabase)
+
+        log_result(impdatabase+"/import_"+impdatabase+".log")
+
+        create_database(impdatabase,impuser,imppass,impserver,impport,"utf8",impca)
+
+
+        gicharcollation=gather_database_charset(impserver,impport,impdatabase,"TARGET")
+        gicharset=gicharcollation[0]
+        gicollation=gicharcollation[1]
+    
+        #getting character set and collation from export data
+        getcharsetfile = open(impdatabase+"/"+crcharset,"r")
+        getcharcollation=getcharsetfile.read()
+        getcharsetorig=getcharcollation.split(",")[0]
+        getcharset=getcharsetorig
+        getcollation=getcharcollation.split(",")[1]
+        if (getcharsetfile):
+           getcharsetfile.close()
+    
+        if (impconvcharset is not None):
+           if (getcharset==impconvcharset.split(":")[0]):
+               getcharset=impconvcharset.split(":")[1]
+               logging.info("Database "+impdatabase+" original character set is   : "+getcharsetorig+" collation is : "+getcollation)
+               logging.info("Database "+impdatabase+" character set is changed to : "+getcharset)
+           else:
+               logging.info("Database "+impdatabase+" character set is : "+getcharset+" collation is : "+getcollation)
+        else:
+           logging.info("Database "+impdatabase+" character set is : "+getcharset+" collation is : "+getcollation)
+    
+    
+        if (getcharset!=gicharset):
+            logging.info("Source database original character set and collation is : "+getcharset+" "+getcollation)
+            logging.info("Target database original character set and collation is : "+gicharset+" "+gicollation)
+            logging.info("Source and Target database must have the same character set and collation")
+            exit()
+    
+    
+        impsetvars=set_params()
+    
+        logging.info("Importing Data to Database: "+impdatabase+" Server: "+impserver+":"+impport+" username: "+impuser)
+    
+        logging.info("Verifying.....")
+
+        #Creating symlink since database parameter for case sensitivity between source and target are different
+        currdir=os.getcwd()
+        os.chdir(impdatabase)
+        gzfiles=glob.glob("*csv") + glob.glob("*gz")
+        for chkfile in gzfiles:
+            if (chkfile!=chkfile.lower()):
+                if (not os.path.islink(chkfile.lower())):
+                   os.symlink(chkfile,chkfile.lower())
+        os.chdir(currdir)
+    
+        global sqllisttables
+        global sqltablesizes
+        global impconnection
+        try:
+           impconnection = pymysql.connect(user=impuser,
+                                            password=imppass,
+                                            host=impserver,
+                                            port=int(impport),
+                                            charset=gicharset,
+                                            ssl_ca=impca,
+                                            database=impdatabase)
+    
+        except (Exception,pymysql.Error) as error:
+           logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+    
+        try:
+           curimptbl = impconnection.cursor()
+    
+           impoldvars=get_params()
+    
+           for impsetvar in impsetvars:
+               try:
+                  logging.info("Executing "+impsetvar)
+                  curimptbl.execute(impsetvar)
+               except (Exception,pymysql.Error) as error:
+                  if (str(error).find("Access denied")!=-1):
+                      logging.info("\033[1;33;40m>>>> Setting global variable must require SUPER or SYSTEM_VARIABLES_ADMIN privileges")
+                      logging.info("\033[1;33;40m>>>> GRANT SYSTEM_VARIABLES_ADMIN on *.* to "+impuser+";")
+                  else:
+                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+    
+           create_table()
+    
+           #create_table_keys()
+    
+           listofdata=[]
+    
+           curimptbl.execute(sqllisttables)
+           rows = curimptbl.fetchall()
+
+           
+               
+
+         
+           for row in rows:
+              if imptables=="all":
+                  if os.path.isfile(impdatabase+"/"+row[0]+".csv"):
+                     slicefiletot=0
+                     logging.info("Comparing total rows within file \033[1;34;40m"+impdatabase+"/"+row[0]+".csv"+"\033[1;32;40m and total rows within sliced files are in progress\033[1;37;40m")
+    
+                     origfiletot=rawincountreg(impdatabase+"/"+row[0]+".csv") 
+                     ctlines = os.popen("zcat "+impdatabase+"/"+row[0]+".*.csv.gz 2>/dev/null | wc -l")
+                     slicefiletot = int(ctlines.read())
+    
+                     if (origfiletot!=slicefiletot):
+                         logging.info("Total rows within sliced files "+impdatabase+"/"+row[0]+".*.csv.gz"+" : "+str(slicefiletot))
+                         logging.info("Total rows within regular file "+impdatabase+"/"+row[0]+".csv"+" : "+str(origfiletot))
+                         slice_file(impdatabase,row[0])
+                     else:
+                         logging.info("Total no of rows is the same")
+    
+                     if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
+                        logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                        curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                        curimptbl.execute("truncate table `"+row[0]+"`;")
+                        curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                        curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                     else:
+                        with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
+                            exprowchunk = read_config('export','rowchunk')
+                            if (flagfile.readlines()[0]==str(exprowchunk)):
+                               logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                            else:
+                               logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
+                               for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
+                                   if os.path.isfile(file2del): os.remove(file2del)
+                               logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                               curimptbl.execute("truncate table `"+row[0]+"`;")
+                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                               curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+    
+                     listofdata.append(row[0])
+                     for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                         listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+    
+                  elif os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz"):
+                     if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
+                        logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                        curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                        curimptbl.execute("truncate table `"+row[0]+"`;")
+                        curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                        curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                     else:
+                        with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
+                            exprowchunk = read_config('export','rowchunk')
+                            if (flagfile.readlines()[0]==str(exprowchunk)):
+                               logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                            else:
+                               logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
+                               for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
+                                   if os.path.isfile(file2del): os.remove(file2del)
+                               logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                               curimptbl.execute("truncate table `"+row[0]+"`;")
+                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                               curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+    
+    
+                     listofdata.append(row[0])
+                     for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                         listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+    
+                  else:
+                     logging.info("File "+impdatabase+"/"+row[0]+".csv.gz or "+impdatabase+"/"+row[0]+".csv doesnt exist")
+              else:
+                  selectedtbls=imptables.split(",")
+                  for selectedtbl in selectedtbls:
+                      if selectedtbl!=row[0]:
+                         continue
+                      else:
+                         if os.path.isfile(impdatabase+"/"+row[0]+".csv"):
+                            slicefiletot=0
+                            logging.info("Comparing total rows within file \033[1;34;40m"+impdatabase+"/"+row[0]+".csv"+"\033[1;32;40m and total rows within sliced files are in progress\033[1;37;40m")
+                            origfiletot=rawincountreg(impdatabase+"/"+row[0]+".csv")
+                            ctlines = os.popen("zcat "+impdatabase+"/"+row[0]+".*.csv.gz 2>/dev/null | wc -l")
+                            slicefiletot = int(ctlines.read())
+       
+                            if (origfiletot!=slicefiletot):
+                               logging.info("Total rows within sliced files "+impdatabase+"/"+row[0]+".*.csv.gz"+" : "+str(slicefiletot))
+                               logging.info("Total rows within regular file "+impdatabase+"/"+row[0]+".csv"+" : "+str(origfiletot))
+                               slice_file(impdatabase,row[0])
+                            else:
+                               logging.info("Total no of rows is the same")
+    
+                            if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
+                               logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                               curimptbl.execute("truncate table `"+row[0]+"`;")
+                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                               curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                            else:
+                               with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
+                                  exprowchunk = read_config('export','rowchunk')
+                                  if (flagfile.readlines()[0]==str(exprowchunk)):
+                                      logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                  else:
+                                      logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
+                                      for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
+                                          if os.path.isfile(file2del): os.remove(file2del)
+                                      logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                      curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                                      curimptbl.execute("truncate table `"+row[0]+"`;")
+                                      curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                                      curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+    
+                            listofdata.append(row[0])
+                            for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                                listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+    
+       
+                         elif os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz"):
+                            if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
+                               logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                               curimptbl.execute("truncate table `"+row[0]+"`;")
+                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                               curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                            else:
+                               with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
+                                  exprowchunk = read_config('export','rowchunk')
+                                  if (flagfile.readlines()[0]==str(exprowchunk)):
+                                     logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                  else:
+                                     logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
+                                     for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
+                                        if os.path.isfile(file2del): os.remove(file2del)
+                                     logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                     curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                                     curimptbl.execute("truncate table `"+row[0]+"`;")
+                                     curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                                     curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+    
+                            listofdata.append(row[0])
+                            for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                                listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+    
+                         else:
+                            logging.info("File "+impdatabase+"/"+row[0]+".csv.gz or "+impdatabase+"/"+row[0]+".csv doesnt exist")
+    
+           impconnection.commit()
+           impconnection.close()
+    
+           sharedvar=mproc.Value('i',0)
+           resultlist=mproc.Manager().list()
+           sharedvar.value=0
+    
+           with mproc.Pool(processes=impparallel) as importpool:
+              multiple_results = [importpool.apply_async(insert_data_from_file, args=(tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,impdatabase,impca),callback=cb) for tbldata in listofdata]
+              importpool.close()
+              importpool.join()
+              [res.get() for res in multiple_results]
+          
+    
+           with mproc.Pool(processes=impparallel) as importpool:
+              multiple_results = [importpool.apply_async(verify_data, (tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,impdatabase,impca)) for tbldata in listofdata]
+              importpool.close()
+              importpool.join()
+              [res.get() for res in multiple_results]
+    
+           impconnection = pymysql.connect(user=impuser,
+                                            password=imppass,
+                                            host=impserver,
+                                            port=int(impport),
+                                            charset=gicharset,
+                                            ssl_ca=impca,
+                                            database=impdatabase)
+    
+           curimptbl = impconnection.cursor()
+           #recreate_fkeys()
+           #create_sequences()
+           for rslt in resultlist:
+              logging.info(rslt) 
+            
+           for impoldvar in impoldvars:
+               try:
+                  logging.info("Executing "+impoldvar)
+                  curimptbl.execute(impoldvar)
+               except (Exception,pymysql.Error) as error:
+                  if (str(error).find("Access denied")!=-1):
+                      logging.info("\033[1;33;40m>>>> Setting global variable must require SUPER or SYSTEM_VARIABLES_ADMIN privileges")
+                      logging.info("\033[1;33;40m>>>> GRANT SYSTEM_VARIABLES_ADMIN on *.* to "+impuser+";")
+                  else:
+                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+    
+        except (Exception,pymysql.Error) as error:
+              logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+       
+        finally:
+           if(impconnection):
+              curimptbl.close()
+              impconnection.close()
+              logging.error("\033[1;37;40mDatabase import connections are closed")
 
 def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdatabase,expca):
     try:
@@ -1324,7 +1390,7 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
                         cursorclass=pymysql.cursors.SSCursor,)
 
        spcursor=spconnection.cursor(cursor=pymysql.cursors.SSCursor)
-       mprocessid=(mproc.current_process()).name
+       mprocessid=mproc.current_process().name
 
 
        logging.info(mprocessid+" Start spooling data on a client from table \033[1;34;40m"+tbldata+"\033[1;37;40m into \033[1;34;40m"+expdatabase+"/"+tbldata+".csv.gz")
@@ -1340,6 +1406,15 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
 
        logging.info(mprocessid+" Writing data to \033[1;34;40m"+expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz")
        f=pgzip.open(expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz","wt", thread=0)
+
+
+       if (tblcharset[tbldata].find("utf8") != -1):
+           charset="utf-8"
+       elif (tblcharset[tbldata].find("latin") != -1):
+           charset="ISO-8859-1"
+       else:
+           charset="ISO-8859-1"
+
 
        allrecords=spcursor.fetchall_unbuffered()
        
@@ -1359,7 +1434,7 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
                 #rowdata=rowdata+"'"+record.decode().replace("\\","\\\\").replace("'","\\'")+"'"+'\t'
                 #rowdata=rowdata+"'"+record.decode()+sep1
                 try:
-                   rowdata=rowdata+quote+record.decode()+quote+sep1
+                   rowdata=rowdata+quote+record.decode(charset)+quote+sep1
                 except (Exception) as error:
                    if (str(error).find("'utf-8' codec can't decode")!=-1):
                       rowdata=rowdata+quote+record.decode("ISO-8859-1")+quote+sep1
@@ -1571,14 +1646,52 @@ def gather_database_info(auser,apass,aserver,aport,gecharset,aca,thedir,thedb):
             aconn.close()
         pass 
 
-def check_databases(dblist,auser,apass,aserver,aport,gecharset,aca):
-    global retdblist
+def create_database(databasename,auser,apass,aserver,aport,gecharset,aca):
+    global configfile,cfgmode
     checkpass=apass
 
     while test_connection(auser,checkpass,aserver,aport,'mysql',aca)==1:
         checkpass=getpass.getpass('Enter Password for '+auser+' :').replace('\b','')
         obfuscatedpass=encode_password(checkpass)
-        config.set("export","password",obfuscatedpass)
+        config.set(cfgmode,"password",obfuscatedpass)
+        with open(configfile, 'w') as cfgfile:
+           config.write(cfgfile)
+
+    try:
+        aconn = pymysql.connect(user=auser,
+                           password=checkpass,
+                           host=aserver,
+                           port=int(aport),
+                           charset=gecharset,
+                           ssl_ca=aca,
+                           database='mysql')
+
+        acursor=aconn.cursor()
+        acursor.execute("show databases like '"+databasename+"';")
+        acursor.fetchall()
+        if (acursor.rowcount==0):
+           logging.info("Creating database "+Blue+databasename)
+           with open(databasename+"/"+crdbfilename, 'rt') as dbscript:
+               acursor.execute(dbscript.readline())
+        else:
+           logging.info("Database "+Cyan+databasename+Green+" already exist")
+        if (aconn):
+            aconn.close()
+
+    except (Exception,pymysql.Error) as error:
+        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+        if (aconn):
+            aconn.close()
+        pass
+
+def check_databases(dblist,auser,apass,aserver,aport,gecharset,aca):
+    global retdblist,configfile,cfgmode
+    checkpass=apass
+
+    while test_connection(auser,checkpass,aserver,aport,'mysql',aca)==1:
+        checkpass=getpass.getpass('Enter Password for '+auser+' :').replace('\b','')
+        obfuscatedpass=encode_password(checkpass)
+        config.set(cfgmode,"password",obfuscatedpass)
         with open(configfile, 'w') as cfgfile:
            config.write(cfgfile)
 
@@ -1602,6 +1715,8 @@ def check_databases(dblist,auser,apass,aserver,aport,gecharset,aca):
                    continue
                else:
                    check_databases(thedb[0],auser,checkpass,aserver,aport,gecharset,aca)
+           if (aconn):
+               aconn.close()
 
        except (Exception,pymysql.Error) as error:
            logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
@@ -1628,6 +1743,9 @@ def check_databases(dblist,auser,apass,aserver,aport,gecharset,aca):
            acursor.execute("SHOW TABLES")
            retdblist.append(dblist)
 
+           if (aconn):
+               aconn.close()
+
        except (Exception,pymysql.Error) as error:
            logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
            if (aconn):
@@ -1638,15 +1756,18 @@ def check_databases(dblist,auser,apass,aserver,aport,gecharset,aca):
 
 #procedure to get all information from information_schema
 def get_all_info(**kwargs):
-    global afile,gecharset
+    global afile,gecharset,configfile
     aserver = read_config('export','servername')
     aport = read_config('export','port')
     adatabase = 'mysql'
     aca = read_config('export','sslca')
-    auser=input('Enter admin username :')
-    apass=getpass.getpass('Enter Password for '+auser+' :').replace('\b','')
+    expuser = read_config('export','username')
+    exppass = read_config('export','password')
+    if (exppass==''):
+       exppass=' ';
+    exppass=decode_password(exppass)
 
-
+    auser=input('Enter admin username@'+aserver+' :')
     dblist=kwargs.get('dblist',None)
 
     #Create directory to spool all export files
@@ -1659,11 +1780,20 @@ def get_all_info(**kwargs):
        logging.error("\033[1;31;40mError occured :"+str(logerr))
        sys.exit(2)
 
-    if test_connection(auser,apass,aserver,aport,adatabase,aca)==1:
-       logging.error("\033[1;31;40mSorry, user: \033[1;36;40m"+auser+"\033[1;31;40m not available or password was wrong!!")
-       if (aca != ""):
-           logging.error("\033[1;31;40mPlease also check whether certificate: \033[1;36;40m"+aca+"\033[1;31;40m is correct!!")
-       sys.exit(2)
+
+
+    if (auser!=expuser):
+       apass=getpass.getpass('Enter Password for '+auser+' :').replace('\b','')
+       while test_connection(auser,apass,aserver,aport,adatabase,aca)==1:
+           apass=getpass.getpass('Enter Password for '+auser+' :').replace('\b','')
+    else:
+       apass=exppass
+       while test_connection(auser,apass,aserver,aport,adatabase,aca)==1:
+           apass=getpass.getpass('Enter Password for '+auser+' :').replace('\b','')
+       obfuscatedpass=encode_password(apass)
+       config.set("export","password",obfuscatedpass)
+       with open(configfile, 'w') as cfgfile:
+           config.write(cfgfile)
 
     gecharcollation=gather_database_charset(aserver,aport,adatabase,"ADMIN",dbuser=auser,dbpass=apass)
     gecharset=gecharcollation[0]
@@ -2185,13 +2315,14 @@ def get_params():
 
 #procedure to export data
 def export_data(**kwargs):
-    global exptables,config,configfile,curtblinfo,crtblfile,expmaxrowsperfile,expdatabase,dtnow,expconnection,gecharset,gecollation,resultlist,expoldvars
+    global exptables,config,configfile,curtblinfo,crtblfile,expmaxrowsperfile,expdatabase,dtnow,expconnection,gecharset,gecollation,resultlist,expoldvars,mainlogfilename,tblcharset,forcexp
     #Read configuration from mysqlconfig.ini file
     logging.debug("Read configuration from mysqlconfig.ini file")
 
     expserver = read_config('export','servername')
     expport = read_config('export','port')
     expdatabase = read_config('export','database')
+    expexcludedb = read_config('export','excludedb')
     expca = read_config('export','sslca')
     expuser = read_config('export','username')
     exppass = read_config('export','password')
@@ -2209,8 +2340,40 @@ def export_data(**kwargs):
     alldbs=check_databases(expdatabase,expuser,exppass,expserver,expport,None,expca)
     exppass = decode_password(read_config('export','password'))
 
+    if (expexcludedb!=None):
+       if (len(expexcludedb.split(","))>1):
+          for dblist in expexcludedb.split(","):
+             alldbs.remove(dblist)
+       else:
+          alldbs.remove(expexcludedb)
+
 
     for expdatabase in alldbs:
+        tblcharset={}
+
+        #Create directory to spool all export files
+        if os.path.exists(expdatabase):
+            if (glob.glob(expdatabase+"/*.gz")!=[] and glob.glob(expdatabase+"/*.sql")!=[]):
+                if (forcexp):
+                    logging.info("Forced to re-export!, Removing directory "+expdatabase+" and its contents")
+                    shutil.rmtree(expdatabase)
+                else:
+                    logging.info("Exported files for database "+Yellow+expdatabase+Green+" exist, skipping export..")
+                    continue
+            else:
+                logging.info("Some files exist on directory "+expdatabase+", Re-exporting..")
+        
+        try:
+           #directory name is source databasename
+           os.mkdir(expdatabase, 0o755 )
+        except FileExistsError as exists:
+           pass
+        except Exception as logerr:
+           logging.error("\033[1;31;40mError occured :"+str(logerr))
+           sys.exit(2)
+
+        log_result(expdatabase+"/export_"+expdatabase+".log")
+
         gecharcollation=gather_database_charset(expserver,expport,expdatabase,"SOURCE")
         gecharsetorig=gecharcollation[0]
         gecharset=gecharsetorig
@@ -2227,15 +2390,6 @@ def export_data(**kwargs):
 
         gecollation=gecharcollation[1]
      
-        #Create directory to spool all export files
-        try:
-           #directory name is source databasename
-           os.mkdir(expdatabase, 0o755 )
-        except FileExistsError as exists:
-           pass
-        except Exception as logerr:
-           logging.error("\033[1;31;40mError occured :"+str(logerr))
-           sys.exit(2)
     
         exprowchunk = read_config('export','rowchunk')
         expparallel = int(read_config('export','parallel'))
@@ -2317,7 +2471,8 @@ def export_data(**kwargs):
            if (crcharsetfile):
               crcharsetfile.close()
     
-           
+           generate_create_database(expdatabase) 
+
            crtblfile = open(expdatabase+"/"+crtblfilename,"w")
     
            for tbldata in listoftables:
@@ -2332,8 +2487,7 @@ def export_data(**kwargs):
               sys.exit()
     
            global totalproc
-    
-    
+
            #manager = mproc.Manager()
     
            sharedvar=mproc.Value('i',0)
@@ -2379,9 +2533,30 @@ def export_data(**kwargs):
               expconnection.close()
               logging.info("\033[1;37;40mDatabase export connections are closed")
 
+#Log result logfilename and default loglevel
+def log_result(logfilename,loglevel="INFO"):
+    dtnow=datetime.datetime.now()
+    nlevel=getattr(logging,loglevel.upper(),None)
+
+    if not isinstance(nlevel, int):
+        raise ValueError('Invalid log level: %s' % loglevel)
+
+    try:
+       log=logging.getLogger()
+       for hdlr in log.handlers[:]:
+           log.removeHandler(hdlr)
+
+       datefrmt = "\033[1;37;40m%(asctime)-15s \033[1;32;40m%(message)s \033[1;37;40m"
+       fileh=logging.FileHandler(logfilename)
+       logging.basicConfig(level=nlevel,format=datefrmt,handlers=[fileh,logging.StreamHandler()])
+       #log.addHandler(fileh)
+
+    except (Exception,pymysql.Error) as error:
+       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+
 #Main program
 def main():
-    global pgzip,xxhash,pymysql,configparser
+    global pgzip,xxhash,pymysql,configparser,mainlogfilename
     neededmodules=['pgzip','pymysql','configparser','xxhash']
     build_python_env(neededmodules)
     import pymysql
@@ -2392,21 +2567,21 @@ def main():
     #initiate signal handler, it will capture if user press ctrl+c key, the program will terminate
     handler = signal.signal(signal.SIGINT, trap_signal)
     try:
-       opts, args=getopt.getopt(sys.argv[1:], "hl:eEisvdt:aco", ["help","log=","export-to-client","export-to-server","import","script","dbinfo","db-list=","all-info","db-compare","clone-variables"])
+       opts, args=getopt.getopt(sys.argv[1:], "hl:eEisvdt:acof", ["help","log=","export-to-client","export-to-server","import","script","dbinfo","db-list=","all-info","db-compare","clone-variables","force-export"])
     except (Exception,getopt.GetoptError) as error:
        logging.error("\n\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        usage()
        sys.exit(2)
 
-    global mode,cfgmode
+    global mode,cfgmode,tblcharset
     global impconnection
     global config,configfile
     global esc,sep1,eol,crlf,quote
-    global dblist
+    global dblist,forcexp
     dblist=None
     verbose = False
-    #default log level value
-    loglevel="INFO"
+    forcexp=False
+    tblcharset={}
     
     #Manipulate options
     for o, a in opts:
@@ -2421,6 +2596,8 @@ def main():
             mode = "exportserver"
         elif o in ("-i","--import"):
             mode = "import"
+        elif o in ("-f","--force-export"):
+            forcexp = True
         elif o in ("-s","--script"):
             mode = "script"
         elif o in ("-l","--log"):
@@ -2451,16 +2628,12 @@ def main():
 
     try: 
        configfile='mysqlconfig.ini'
-       logfilename='expimpmysql.log'
+       mainlogfilename='expimpmysql.log'
+       log_result(mainlogfilename)
+
        dtnow=datetime.datetime.now()
-       nlevel=getattr(logging,loglevel.upper(),None)
+       logging.info(dtnow.strftime("Starting Program %d-%m-%Y %H:%M:%S"))
 
-       datefrmt = "\033[1;37;40m%(asctime)-15s \033[1;32;40m%(message)s \033[1;37;40m"
-       logging.basicConfig(level=nlevel,format=datefrmt,handlers=[logging.FileHandler(logfilename),logging.StreamHandler()])
-       logging.info(dtnow.strftime("Starting program %d-%m-%Y %H:%M:%S"))
-
-       if not isinstance(nlevel, int):
-          raise ValueError('Invalid log level: %s' % loglevel)
 
        if not os.path.isfile(configfile):
           logging.error('\033[1;31;40mFile '+configfile+' doesnt exist!') 
@@ -2508,6 +2681,7 @@ def main():
           get_all_variables()
        else:
           sys.exit()
+       log_result(mainlogfilename)
 
     except (Exception,configparser.Error) as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
