@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 586 2024-04-18 06:43:25Z bpahlawa $
+# $Id: expimpmysql.py 587 2024-04-18 11:35:56Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-18 14:43:25 +0800 (Thu, 18 Apr 2024) $
-# $Revision: 586 $
+# $Date: 2024-04-18 19:35:56 +0800 (Thu, 18 Apr 2024) $
+# $Revision: 587 $
 
 import re
 from string import *
@@ -914,7 +914,7 @@ def verify_data(tablefile,impuser,imppass,impserver,impport,impcharset,impdataba
        #else:
        logging.info(mprocessid+" Counting no of rows from file(s) \033[1;34;40m"+dirname+"/"+tablename+".*csv"+"\033[1;37;40m")
        for thedumpfile in glob.glob(dirname+"/"+tablename+".*.csv.gz"):
-           rowsfromfile+=rawincount(thedumpfile)
+           rowsfromfile+=rawincountgz(thedumpfile)
        for thedumpfile in glob.glob(dirname+"/"+tablename+".csv.gz"):
            rowsfromfile+=rawincount(thedumpfile)
 
@@ -1025,15 +1025,17 @@ def import_data():
     if (impexcludedb!=None and impexcludedb!=""):
        if (len(impexcludedb.split(","))>1):
           for dblist in impexcludedb.split(","):
-             impalldb.remove(dblist)
+             if (dblist in impalldb):
+                impalldb.remove(dblist)
        else:
-          impalldb.remove(impexcludedb)
+          if (impexcludedb in impalldb):
+             impalldb.remove(impexcludedb)
 
     for impdatabase in impalldb: 
-        logging.info("\033[1;33mTarget database is : "+impdatabase)
 
         log_result(impdatabase+"/import_"+impdatabase+".log")
 
+        logging.info("\033[1;33mTarget database is : "+impdatabase)
         create_database(impdatabase,impuser,imppass,impserver,impport,"utf8",impca)
 
 
@@ -1380,13 +1382,23 @@ def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdat
 def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,expdatabase,exprowchunk,expca):
     global totalproc,sharedvar
     spconnection=None
+    if (tblcharset[tbldata].find("utf8") != -1):
+        charset="utf-8"
+        dbcharset="utf8"
+    elif (tblcharset[tbldata].find("latin") != -1):
+        charset="ISO-8859-1"
+        dbcharset="latin1"
+    else:
+        charset="ISO-8859-1"
+        dbcharset=expcharset
+
     try:
        stime=datetime.datetime.now()
        spconnection=pymysql.connect(user=expuser,
                         password=exppass,
                         host=expserver,
                         port=int(expport),
-                        charset=expcharset,
+                        charset=dbcharset,
                         database=expdatabase,
                         ssl_ca=expca,
                         cursorclass=pymysql.cursors.SSCursor,)
@@ -1408,14 +1420,6 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
 
        logging.info(mprocessid+" Writing data to \033[1;34;40m"+expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz")
        f=pgzip.open(expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz","wt", thread=0)
-
-
-       if (tblcharset[tbldata].find("utf8") != -1):
-           charset="utf-8"
-       elif (tblcharset[tbldata].find("latin") != -1):
-           charset="ISO-8859-1"
-       else:
-           charset="ISO-8859-1"
 
 
        allrecords=spcursor.fetchall_unbuffered()
@@ -2345,10 +2349,11 @@ def export_data(**kwargs):
     if (expexcludedb!=None and expexcludedb!=""):
        if (len(expexcludedb.split(","))>1):
           for dblist in expexcludedb.split(","):
-             alldbs.remove(dblist)
+             if (dblist in alldbs):
+                alldbs.remove(dblist)
        else:
-          alldbs.remove(expexcludedb)
-
+          if (expexcludedb in alldbs):
+             alldbs.remove(expexcludedb)
 
     for expdatabase in alldbs:
         tblcharset={}
