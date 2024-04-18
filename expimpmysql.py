@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 588 2024-04-18 12:02:41Z bpahlawa $
+# $Id: expimpmysql.py 589 2024-04-18 14:03:37Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-18 20:02:41 +0800 (Thu, 18 Apr 2024) $
-# $Revision: 588 $
+# $Date: 2024-04-18 22:03:37 +0800 (Thu, 18 Apr 2024) $
+# $Revision: 589 $
 
 import re
 from string import *
@@ -2079,6 +2079,24 @@ def get_all_variables():
             tconn.close()
         exit()
 
+def reconnect(ruser,rpass,rserver,rport,rcharset,rca,rdatabase):
+    try:
+        conn = pymysql.connect(user=ruser,
+                           password=rpass,
+                           host=rserver,
+                           port=int(rport),
+                           charset=rcharset,
+                           ssl_ca=rca,
+                           database=rdatabase)
+        return(conn)
+
+    except (Exception,pymysql.Error) as error:
+        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+        if (conn):
+            conn.close()
+        exit(2)
+
+
 def compare_database():
     expserver = read_config('export','servername')
     expport = read_config('export','port')
@@ -2164,21 +2182,8 @@ def compare_database():
     sconn=None
 
     try:
-        sconn = pymysql.connect(user=expuser,
-                           password=exppass,
-                           host=expserver,
-                           port=int(expport),
-                           charset=gecharset,
-                           ssl_ca=expca,
-                           database=expdatabase)
-
-        tconn = pymysql.connect(user=impuser,
-                           password=imppass,
-                           host=impserver,
-                           port=int(impport),
-                           charset=gicharset,
-                           ssl_ca=impca,
-                           database=impdatabase)
+        sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
+        tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
 
     except (Exception,pymysql.Error) as error:
         logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
@@ -2205,6 +2210,39 @@ def compare_database():
         tcursor=sconn.cursor()
 
         for tbl in alltbls:
+            ccursor=sconn.cursor()
+            ccursor.execute("show create table `"+tbl[0]+"`")
+            chkcharset=ccursor.fetchone()[1]
+            if (chkcharset.find("CHARSET=utf8")!=-1):
+               #table has charset utf8
+               if (gecharset.find("CHARSET=latin1")==-1):
+                  #gecharset has charset latin1
+                  #set charset to utf8
+                  gecharset="utf8"
+                  if (sconn):
+                     sconn.close()
+                  if (tconn):
+                     tconn.close()
+                  sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
+                  tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
+                  scursor=sconn.cursor()
+                  tcursor=tconn.cursor()
+            else:
+               #table has charset latin1
+               if (gecharset.find("CHARSET=utf8")==-1):
+                  #gecharset has charset utf8
+                  #set gecharset to latin1
+                  gecharset="latin1"
+                  if (sconn):
+                     sconn.close()
+                  if (tconn):
+                     tconn.close()
+                  sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
+                  tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
+                  scursor=sconn.cursor()
+                  tcursor=tconn.cursor()
+
+
             logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
             query="select * from `"+tbl[0]+"` order by 1"
             scursor.execute(query)
@@ -2222,7 +2260,8 @@ def compare_database():
                 shash=xxhash.xxh64_hexdigest(str(scursor.fetchone()))
                 thash=xxhash.xxh64_hexdigest(str(tcursor.fetchone()))
                 if (shash!=thash):
-                   logging.info("\033[1;31;40m"+expdatabase+" >> "+tbl[0]+" ROW# "+str(i)+" << "+impdatabase+" NOT MATCHED!!")
+                   currtime=str(datetime.datetime.now())
+                   print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCHED!!"+Coloff,end="\n",flush=True)
                    logging.info(query+" (select *,row_number() over () rownum from `"+tbl[0]+"`) tbl where tbl.rownum="+str(i))
                 else:
                    currtime=str(datetime.datetime.now())
