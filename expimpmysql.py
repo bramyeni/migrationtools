@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 585 2024-04-18 06:30:05Z bpahlawa $
+# $Id: expimpmysql.py 586 2024-04-18 06:43:25Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-18 14:30:05 +0800 (Thu, 18 Apr 2024) $
-# $Revision: 585 $
+# $Date: 2024-04-18 14:43:25 +0800 (Thu, 18 Apr 2024) $
+# $Revision: 586 $
 
 import re
 from string import *
@@ -1050,7 +1050,7 @@ def import_data():
         if (getcharsetfile):
            getcharsetfile.close()
     
-        if (impconvcharset is not None):
+        if (impconvcharset!=None and impconvcharset!=""):
            if (getcharset==impconvcharset.split(":")[0]):
                getcharset=impconvcharset.split(":")[1]
                logging.info("Database "+impdatabase+" original character set is   : "+getcharsetorig+" collation is : "+getcollation)
@@ -2108,7 +2108,7 @@ def compare_database():
     gecharsetorig=gecharcollation[0]
     gecharset=gecharsetorig
 
-    if (expconvcharset is not None):
+    if (expconvcharset!=None and expconvcharset!=""):
         if (gecharset==expconvcharset.split(":")[0]):
             gecharset=expconvcharset.split(":")[1]
             logging.info("Database "+expdatabase+" original character set is   : "+gecharsetorig)
