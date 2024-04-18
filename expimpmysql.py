@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 590 2024-04-18 14:13:27Z bpahlawa $
+# $Id: expimpmysql.py 591 2024-04-18 15:19:39Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-18 22:13:27 +0800 (Thu, 18 Apr 2024) $
-# $Revision: 590 $
+# $Date: 2024-04-18 23:19:39 +0800 (Thu, 18 Apr 2024) $
+# $Revision: 591 $
 
 import re
 from string import *
@@ -2215,7 +2215,7 @@ def compare_database():
             chkcharset=ccursor.fetchone()[1]
             if (chkcharset.find("CHARSET=utf8")!=-1):
                #table has charset utf8
-               if (gecharset.find("CHARSET=latin")!=-1):
+               if (gecharset.find("latin")!=-1):
                   #gecharset has charset latin1
                   #set charset to utf8
                   gecharset="utf8"
@@ -2230,7 +2230,7 @@ def compare_database():
                   tcursor=tconn.cursor()
             else:
                #table has charset latin1
-               if (gecharset.find("CHARSET=utf8")!=-1):
+               if (gecharset.find("utf8")!=-1):
                   #gecharset has charset utf8
                   #set gecharset to latin1
                   gecharset="latin1"
