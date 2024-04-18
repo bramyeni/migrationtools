@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 584 2024-04-18 06:19:03Z bpahlawa $
+# $Id: expimpmysql.py 585 2024-04-18 06:30:05Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-18 14:19:03 +0800 (Thu, 18 Apr 2024) $
-# $Revision: 584 $
+# $Date: 2024-04-18 14:30:05 +0800 (Thu, 18 Apr 2024) $
+# $Revision: 585 $
 
 import re
 from string import *
@@ -2487,7 +2487,7 @@ def export_data(**kwargs):
     
            if mode=="script":
               if(curtblinfo): curtblinfo.close()
-              sys.exit()
+              continue
     
            global totalproc
 
