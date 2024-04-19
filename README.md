@@ -4,15 +4,17 @@ Scripts to Perform Database Migrations built by me using Python3
 # Features
 - Enforce to use Python3 virtual environment, so required modules are downloaded to virtual environment
 - multiprocessing to perform simultaneous exports and imports
-- Slice into chunks to perform multiplple inserts per table
+- Slice into chunks to perform multiplple inserts per table also multiple inserts on multiple tables
 - Compressed using pgzip to perform multiple compression using all processors that are available
 - Encrypted password is stored into config file to reduce typing when performing exports and imports
 - Spool all original DDLs (source DB) and converted DDLs (target DB) so it will be easy to debug or to be reverted back
 - Configurable row data separator, end of line, quote and escape
 - Export all databases within the same instance or choose multiple databases separated by comma
-- Export all tables within database (apply to one database only) or choose multiple tables separated by comma
+- Export all tables within database or choose multiple tables separated by comma
+- Import all databases within the same instance or choose multiple databases to be imported separated by comma
+- Import all tables or choose multiple tables separated by comma
 - Compare the rowcount between exported file and imported data
-- Compare source and target database hash values on every single row of all tables
+- Compare source and target database hash values on every single row of all tables (using xxhash)
 
 # Source db and Target db
 At present my script will incorporate only few DB migrations and only OFFLINE migration for now
@@ -86,15 +88,18 @@ How to use
 
 Usage:
    expimpmysql.py [OPTIONS]
-General options:
+General Options:
    -e, --export-to-client        Export using Client Code
    -E, --export-to-server        Export using Server Mode (very fast)
+   -f, --force-export            Remove previous exported directory and its files
    -i, --import                  Import Mode
    -s, --script                  Generate Scripts
    -d, --dbinfo  -t, --db-list=  Gather Database Info (all|list|db1,db2,dbN)
    -a, --all-info                Gather All Information From information_schema
    -c, --db-compare              Compare Database
+   -o, --clone-variables         Clone Variables from a Source to a Target Database
    -l, --log=                    INFO|DEBUG|WARNING|ERROR|CRITICAL
+
    
 </pre>
 
@@ -117,13 +122,15 @@ crlf = 0a
 
 [export]
 ;severname can be IP Address or FQDN
-servername = 192.168.0.221
+servername = 192.168.0.111
 ;port number that is used by MySQL/MariaDB
 port = 3306
 ;username must have permission to read the database(s) that is/are listed here
 username = bram
-;export database can be "all" OR list of tables with comma separated
-database = opennebula,pos
+;export database can be "all" OR list of databases with comma separated
+database = opennebula,pos,zabbix
+;list of databases to be excluded with comma separated
+excludedb = pos,zabbix
 ;number of rows per file
 rowchunk = 1000000
 maxrowsperfile = 1000000
@@ -133,7 +140,7 @@ tables = all
 parallel = 5
 ;CA certificate for connection encryption in transit
 sslca = /etc/mysql/CA.crt
-password = XXXXXXX
+password =
 convertcharset = latin1:utf8mb4
 ;mysqlparamN (sequence number)
 mysqlparam1 = net_read_timeout:360
@@ -148,7 +155,11 @@ port = 3306
 ;username must have permission to write into the database that is listed here
 username = bram
 ;import database must be one database
-database = opennebula2
+database = opennebula2,post,zabbix
+;list of databases to be excluded with comma separated
+excludedb = pos,zabbix
+;list of databases to be renamed when importing
+renamedb = pos:pos2,zabbix:zabbix2
 ;set number of threads
 parallel = 12
 locktimeout = 1000
@@ -158,7 +169,8 @@ rowchunk = 100000
 tables = FLOORS,RESOURCES
 ;CA certificate for connection encryption in transit
 sslca =
-password = bla&df7
+password = Na(y]+=xf1yJkbla
+
 </pre>
 
 NOTE: initially password need to be left blank, so it will prompt for password then it will be encrypted and stored into the above config file
