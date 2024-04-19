@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 593 2024-04-19 07:16:24Z bpahlawa $
+# $Id: expimpmysql.py 594 2024-04-19 09:10:10Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-19 15:16:24 +0800 (Fri, 19 Apr 2024) $
-# $Revision: 593 $
+# $Date: 2024-04-19 17:10:10 +0800 (Fri, 19 Apr 2024) $
+# $Revision: 594 $
 
 import re
 from string import *
@@ -585,10 +585,8 @@ def generate_create_table(tablename):
 
        for row in rows:
           crtblfile.write(row[1]+";\n")
-          if (row[1].find("CHARSET=utf8")!=-1):
-             tblcharset[row[0]]="utf8"
-          elif (row[1].find("CHARSET=latin")!=-1):
-             tblcharset[row[0]]="latin"
+          charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;|]*",row[1])
+          tblcharset[row[0]]=charset[0]
 
     except (Exception,pymysql.Error) as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
@@ -607,7 +605,7 @@ def create_table():
        for line in fcrtable.readlines():
           if line.find(";") != -1:
              if (line.find("CHARSET=") != -1):
-                 charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;].*",line)
+                 charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;|]*",line)
                  if (charset!=[] and tblname!=[]):
                      tblcharset[tblname[0].lower()]=charset[0]
              try:
@@ -1391,13 +1389,15 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
         dbcharset="utf8"
     elif (tblcharset[tbldata].find("latin") != -1):
         charset="ISO-8859-1"
-        dbcharset="latin1"
+        dbcharset="utf8"
     else:
         charset="ISO-8859-1"
         dbcharset=expcharset
 
+
     try:
        stime=datetime.datetime.now()
+
        spconnection=pymysql.connect(user=expuser,
                         password=exppass,
                         host=expserver,
@@ -1408,8 +1408,8 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
                         cursorclass=pymysql.cursors.SSCursor,)
 
        spcursor=spconnection.cursor(cursor=pymysql.cursors.SSCursor)
-       mprocessid=mproc.current_process().name
 
+       mprocessid=mproc.current_process().name
 
        logging.info(mprocessid+" Start spooling data on a client from table \033[1;34;40m"+tbldata+"\033[1;37;40m into \033[1;34;40m"+expdatabase+"/"+tbldata+".csv.gz")
 
@@ -2228,37 +2228,18 @@ def compare_database():
             ccursor=sconn.cursor()
             ccursor.execute("show create table `"+tbl[0]+"`")
             chkcharset=ccursor.fetchone()[1]
-            if (chkcharset.find("CHARSET=utf8")!=-1):
-               #table has charset utf8
-               if (gecharset.find("latin")!=-1):
-                  #gecharset has charset latin1
-                  #set charset to utf8
-                  gecharset="utf8"
-                  gicharset="utf8"
-                  if (sconn):
-                     sconn.close()
-                  if (tconn):
-                     tconn.close()
-                  sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
-                  tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
-                  scursor=sconn.cursor()
-                  tcursor=tconn.cursor()
-            else:
-               #table has charset latin1
-               if (gecharset.find("utf8")!=-1):
-                  #gecharset has charset utf8
-                  #set gecharset to latin1
-                  gecharset="latin1"
-                  gicharset="latin1"
-                  if (sconn):
-                     sconn.close()
-                  if (tconn):
-                     tconn.close()
-                  sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
-                  tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
-                  scursor=sconn.cursor()
-                  tcursor=tconn.cursor()
-
+            charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;|]*",chkcharset)
+            if (gecharset!=charset[0]):
+                gecharset=charset[0]
+                gicharset=charset[0]
+                if (sconn):
+                   sconn.close()
+                if (tconn):
+                   tconn.close()
+                sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
+                tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
+                scursor=sconn.cursor()
+                tcursor=tconn.cursor()
 
             logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
             query="select * from `"+tbl[0]+"` order by 1"
@@ -2280,11 +2261,11 @@ def compare_database():
                 thash=xxhash.xxh64_hexdigest(tdata)
                 if (shash!=thash):
                    currtime=str(datetime.datetime.now())
-                   print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCHED!!"+Coloff,end="\n",flush=True)
+                   print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCHED!! (charset="+gecharset+")"+Coloff,end="\n",flush=True)
                    logging.info(query+" (select *,row_number() over () rownum from `"+tbl[0]+"`) tbl where tbl.rownum="+str(i))
                 else:
                    currtime=str(datetime.datetime.now())
-                   print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+White+"MATCHED!!"+Coloff,end="",flush=True)
+                   print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+White+"MATCHED!! (charset="+gecharset+")"+Coloff,end="",flush=True)
             if (currtime!=None): 
                 print("") 
             else:
@@ -2559,6 +2540,8 @@ def export_data(**kwargs):
            sharedvar=mproc.Value('i',0)
            resultlist=mproc.Manager().list()
            sharedvar.value=0
+
+           
     
            with mproc.Pool(processes=expparallel) as exportpool:
               if (kwargs.get('spool',None)=='toclient' or kwargs.get('spool',None)==None):
