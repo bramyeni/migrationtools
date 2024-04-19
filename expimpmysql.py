@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 592 2024-04-19 03:13:07Z bpahlawa $
+# $Id: expimpmysql.py 593 2024-04-19 07:16:24Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-19 11:13:07 +0800 (Fri, 19 Apr 2024) $
-# $Revision: 592 $
+# $Date: 2024-04-19 15:16:24 +0800 (Fri, 19 Apr 2024) $
+# $Revision: 593 $
 
 import re
 from string import *
@@ -596,7 +596,7 @@ def generate_create_table(tablename):
 
 #procedure to create table
 def create_table():
-    global impconnection,impdatabase
+    global impconnection,impdatabase,tblcharset
     curcrtable=impconnection.cursor()
     createtable=""
     crtblfailed=[]
@@ -606,6 +606,10 @@ def create_table():
        curcrtable.execute("SET FOREIGN_KEY_CHECKS=0;")
        for line in fcrtable.readlines():
           if line.find(";") != -1:
+             if (line.find("CHARSET=") != -1):
+                 charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;].*",line)
+                 if (charset!=[] and tblname!=[]):
+                     tblcharset[tblname[0].lower()]=charset[0]
              try:
                 curcrtable.execute(createtable+line)
                 impconnection.commit()
@@ -620,6 +624,8 @@ def create_table():
                 pass
              createtable=""
           else:
+             if (line.find("CREATE TABLE") != -1):
+                 tblname=re.findall("CREATE TABLE `(.*)` ",line)
              if createtable=="":
                 logging.info("\033[1;33;40mExecuting...."+line[:-2])
              createtable+=line
@@ -760,7 +766,7 @@ def insert_data(tablename):
 def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset,impdatabase,improwchunk,dirname,impca):
     fflag=None
     insconnection=None
-    global implocktimeout,sharedvar
+    global implocktimeout,sharedvar,tblcharset
     mprocessid=(mproc.current_process()).name
     try:
        stime=datetime.datetime.now()
@@ -803,9 +809,9 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
        curinsdata.execute("SET FOREIGN_KEY_CHECKS=0;")
        curinsdata.execute("set innodb_lock_wait_timeout="+implocktimeout)
        #curinsdata.execute("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table "+impdatabase+"."+tablename+" fields terminated by '\\t' ignore 1 LINES;")
-       curinsdata.execute("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
+       curinsdata.execute("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
        testwr=open(dirname+"/"+tablefile+"-loadcmd.txt","w")
-       testwr.write("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
+       testwr.write("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
        testwr.close()
 
        for warnmsg in insconnection.show_warnings():
@@ -1378,7 +1384,7 @@ def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdat
 
 #procedure to spool data unbuffered to a file in parallel
 def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,expdatabase,exprowchunk,expca):
-    global totalproc,sharedvar
+    global totalproc,sharedvar,tblcharset
     spconnection=None
     if (tblcharset[tbldata].find("utf8") != -1):
         charset="utf-8"
