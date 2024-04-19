@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 591 2024-04-18 15:19:39Z bpahlawa $
+# $Id: expimpmysql.py 592 2024-04-19 03:13:07Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-18 23:19:39 +0800 (Thu, 18 Apr 2024) $
-# $Revision: 591 $
+# $Date: 2024-04-19 11:13:07 +0800 (Fri, 19 Apr 2024) $
+# $Revision: 592 $
 
 import re
 from string import *
@@ -773,7 +773,6 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
           if os.path.isfile(dirname+"/"+filename+"-tbl.flag"):
              logging.info(mprocessid+"\033[1;35;40m Skipping from file "+filename)
              return()
-       
        insconnection=pymysql.connect(user=impuser,
                                       password=imppass,
                                       host=impserver,
@@ -785,7 +784,6 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
        curinsdata=insconnection.cursor()
        
        mprocessid=(mproc.current_process()).name
-
 
        if os.path.isfile(dirname+"/"+filename):
           logging.info(mprocessid+" Extracting data from \033[1;34;40m"+filename+"\033[1;37;40m to a file "+dirname+"/"+tablefile+".csv \033[1;34;40m"+tablename)
@@ -1204,7 +1202,7 @@ def import_data():
               else:
                   selectedtbls=imptables.split(",")
                   for selectedtbl in selectedtbls:
-                      if selectedtbl!=row[0]:
+                      if selectedtbl.lower()!=row[0]:
                          continue
                       else:
                          if os.path.isfile(impdatabase+"/"+row[0]+".csv"):
@@ -1435,16 +1433,16 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
           for record in records:
              #print("============="+str(type(record))+"===================")
              if (record==''):
-                rowdata=rowdata+quote+' '+quote+sep1
+                rowdata=rowdata+quote+''+quote+sep1
              elif (isinstance(record, bytes)):
                 #rowdata=rowdata+"'"+record.decode().replace("\\","\\\\").replace("'","\\'")+"'"+'\t'
                 #rowdata=rowdata+"'"+record.decode()+sep1
-                try:
-                   rowdata=rowdata+quote+record.decode(charset)+quote+sep1
-                except (Exception) as error:
-                   if (str(error).find("'utf-8' codec can't decode")!=-1):
-                      rowdata=rowdata+quote+record.decode("ISO-8859-1")+quote+sep1
-                   pass
+                #try:
+                rowdata=rowdata+quote+record.decode(charset).replace(esc,esc+esc).replace(quote,esc+quote)+quote+sep1
+                #except (Exception) as error:
+                #   if (str(error).find("'utf-8' codec can't decode")!=-1):
+                #      rowdata=rowdata+quote+record.decode("ISO-8859-1")+quote+sep1
+                #   pass
              elif (isinstance(record, float)):
                 rowdata=rowdata+quote+exp2normal(record)+quote+sep1
              elif (isinstance(record, int)):
@@ -1452,11 +1450,16 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
              elif (isinstance(record, type(None))):
                 rowdata=rowdata+str(record).replace("None",esc+"N")+sep1
              elif (isinstance(record, str)):
-                rowdata=rowdata+quote+record+quote+sep1
+                #rowdata=rowdata+quote+record.replace(esc,esc+esc).replace(quote,esc+quote)+quote+sep1
+                #record2=record.replace("\u00a0","").replace("\xa0","")
+                rowdata=rowdata+quote+record.replace(esc,esc+esc).replace(quote,esc+quote)+quote+sep1
              else:
                 #print("===="+str(record)+"=====")
-                rowdata=rowdata+quote+str(record)+quote+sep1
+                rowdata=rowdata+quote+str(record).replace(esc,esc+esc).replace(quote,esc+quote)+quote+sep1
+
           f.write(rowdata[:-len(sep1)]+eol+crlf)
+
+
 
           if (rowcount>=int(exprowchunk)):
              logging.info(mprocessid+" Written "+str(rowcount)+" rows to \033[1;34;40m"+expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz")
@@ -2197,13 +2200,19 @@ def compare_database():
     logging.info("User/Host \033[1;34;40m"+impuser+"@"+impserver+"\033[1;37;40m is connected to Target Database : \033[1;34;40m"+impdatabase)
 
     try:
+        alltbls=()
+        scursor=sconn.cursor()
+
         if (exptables!="all"):
            if (len(exptables.split(","))>1):
-               alltbls=exptables
+               for exptbl in exptables.split(","):
+                   tmptbl = ((exptbl,),)
+                   alltbls+=tmptbl
+           else:
+               alltbls=((exptables,),)
         else:
 
            querytbl="show tables"
-           scursor=sconn.cursor()
            scursor.execute(querytbl)
            alltbls=scursor.fetchall()
 
@@ -2247,9 +2256,7 @@ def compare_database():
 
             logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
             query="select * from `"+tbl[0]+"` order by 1"
-            scursor.execute(query)
             srows=scursor.execute(query)
-            tcursor.execute(query)
             trows=tcursor.execute(query)
 
             if (trows!=srows):
@@ -2259,8 +2266,12 @@ def compare_database():
             i=1
             currtime=None
             for i in range(1,srows+1):
-                shash=xxhash.xxh64_hexdigest(str(scursor.fetchone()))
-                thash=xxhash.xxh64_hexdigest(str(tcursor.fetchone()))
+                sdata=str(scursor.fetchone())
+                tdata=str(tcursor.fetchone())
+                #print(sdata)
+                #print(tdata)
+                shash=xxhash.xxh64_hexdigest(sdata)
+                thash=xxhash.xxh64_hexdigest(tdata)
                 if (shash!=thash):
                    currtime=str(datetime.datetime.now())
                    print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCHED!!"+Coloff,end="\n",flush=True)
