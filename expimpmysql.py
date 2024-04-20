@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 596 2024-04-20 06:18:31Z bpahlawa $
+# $Id: expimpmysql.py 597 2024-04-20 06:45:29Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-20 14:18:31 +0800 (Sat, 20 Apr 2024) $
-# $Revision: 596 $
+# $Date: 2024-04-20 14:45:29 +0800 (Sat, 20 Apr 2024) $
+# $Revision: 597 $
 
 import re
 from string import *
@@ -2289,6 +2289,7 @@ def compare_database():
    
            tcursor=sconn.cursor()
    
+           l_mismatches={}
            for tbl in alltbls:
                ccursor=sconn.cursor()
                ccursor.execute("show create table `"+tbl[0]+"`")
@@ -2316,6 +2317,7 @@ def compare_database():
                   continue
    
                i=1
+               l_mism=0
                currtime=None
                for i in range(1,srows+1):
                    sdata=str(scursor.fetchone())
@@ -2325,9 +2327,11 @@ def compare_database():
                    shash=xxhash.xxh64_hexdigest(sdata)
                    thash=xxhash.xxh64_hexdigest(tdata)
                    if (shash!=thash):
+                      l_mism=l_mism+1
                       currtime=str(datetime.datetime.now())
                       print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCHED!! (charset="+gecharset+")"+Coloff,end="\n",flush=True)
                       logging.info(query+" (select *,row_number() over () rownum from `"+tbl[0]+"`) tbl where tbl.rownum="+str(i))
+                      l_mismatches[tbl[0]]=l_mism
                    else:
                       currtime=str(datetime.datetime.now())
                       print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+White+"MATCHED!! (charset="+gecharset+")"+Coloff,end="",flush=True)
@@ -2337,7 +2341,10 @@ def compare_database():
                    currtime=str(datetime.datetime.now())
                    print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" NO ROWS "+Blue+Coloff+" << "+Cyan+impdatabase+Coloff)
    
-   
+           if (l_mism>0):
+              for l_mismkey in l_mismatches:
+                  l_mismatches_disp += l_mismkey + ": " + l_mismatches[l_mismkey] + ", "
+                  logging.info("List of tables are not matched within between Source and Target database "+expdatabase+": "+Yellow+l_mismatches_disp)
    
        except (Exception,pymysql.Error) as error:
            logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
