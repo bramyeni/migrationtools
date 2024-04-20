@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 599 2024-04-20 07:35:27Z bpahlawa $
+# $Id: expimpmysql.py 600 2024-04-20 07:39:24Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-20 15:35:27 +0800 (Sat, 20 Apr 2024) $
-# $Revision: 599 $
+# $Date: 2024-04-20 15:39:24 +0800 (Sat, 20 Apr 2024) $
+# $Revision: 600 $
 
 import re
 from string import *
@@ -2342,6 +2342,7 @@ def compare_database():
                    print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" NO ROWS "+Blue+Coloff+" << "+Cyan+impdatabase+Coloff)
    
            if (l_mismatches!={}):
+              l_mismatches_disp=""
               for l_mismkey in l_mismatches:
                   l_mismatches_disp += l_mismkey + ": " + l_mismatches[l_mismkey] + ", "
                   logging.info("List of tables are not matched within between Source and Target database "+expdatabase+": "+Yellow+l_mismatches_disp)
