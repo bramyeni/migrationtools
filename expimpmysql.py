@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 597 2024-04-20 06:45:29Z bpahlawa $
+# $Id: expimpmysql.py 598 2024-04-20 06:56:21Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-20 14:45:29 +0800 (Sat, 20 Apr 2024) $
-# $Revision: 597 $
+# $Date: 2024-04-20 14:56:21 +0800 (Sat, 20 Apr 2024) $
+# $Revision: 598 $
 
 import re
 from string import *
@@ -2345,6 +2345,9 @@ def compare_database():
               for l_mismkey in l_mismatches:
                   l_mismatches_disp += l_mismkey + ": " + l_mismatches[l_mismkey] + ", "
                   logging.info("List of tables are not matched within between Source and Target database "+expdatabase+": "+Yellow+l_mismatches_disp)
+           else:
+              logging.info("All tables within Source and Target database "+expdatabase+": "+Yellow+" are MATCHED!")
+
    
        except (Exception,pymysql.Error) as error:
            logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
