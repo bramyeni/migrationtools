@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 595 2024-04-20 06:15:33Z bpahlawa $
+# $Id: expimpmysql.py 596 2024-04-20 06:18:31Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-20 14:15:33 +0800 (Sat, 20 Apr 2024) $
-# $Revision: 595 $
+# $Date: 2024-04-20 14:18:31 +0800 (Sat, 20 Apr 2024) $
+# $Revision: 596 $
 
 import re
 from string import *
@@ -2206,6 +2206,7 @@ def compare_database():
 
     for expdatabase in l_cmpalldb:
        impdatabase=expdatabase
+       log_result(expdatabase+"/compare_"+expdatabase+".log")
        logging.info("Comparing Between Source and Target Database "+Yellow+expdatabase)
        while test_connection(expuser,exppass,expserver,expport,expdatabase,expca)==1:
            exppass=getpass.getpass('Enter Password for '+expuser+' :').replace('\b','')
@@ -2469,6 +2470,7 @@ def export_data(**kwargs):
 
     for expdatabase in l_expalldb:
         tblcharset={}
+        log_result(expdatabase+"/export_"+expdatabase+".log")
 
         #Create directory to spool all export files
         if os.path.exists(expdatabase):
@@ -2492,7 +2494,6 @@ def export_data(**kwargs):
            logging.error("\033[1;31;40mError occured :"+str(logerr))
            sys.exit(2)
 
-        log_result(expdatabase+"/export_"+expdatabase+".log")
 
         gecharcollation=gather_database_charset(expserver,expport,expdatabase,"SOURCE")
         gecharsetorig=gecharcollation[0]
