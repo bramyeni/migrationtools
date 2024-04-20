@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 598 2024-04-20 06:56:21Z bpahlawa $
+# $Id: expimpmysql.py 599 2024-04-20 07:35:27Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-20 14:56:21 +0800 (Sat, 20 Apr 2024) $
-# $Revision: 598 $
+# $Date: 2024-04-20 15:35:27 +0800 (Sat, 20 Apr 2024) $
+# $Revision: 599 $
 
 import re
 from string import *
@@ -2287,7 +2287,7 @@ def compare_database():
               scursor.execute(querytbl)
               alltbls=scursor.fetchall()
    
-           tcursor=sconn.cursor()
+           tcursor=tconn.cursor()
    
            l_mismatches={}
            for tbl in alltbls:
@@ -2341,7 +2341,7 @@ def compare_database():
                    currtime=str(datetime.datetime.now())
                    print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" NO ROWS "+Blue+Coloff+" << "+Cyan+impdatabase+Coloff)
    
-           if (l_mism>0):
+           if (l_mismatches!={}):
               for l_mismkey in l_mismatches:
                   l_mismatches_disp += l_mismkey + ": " + l_mismatches[l_mismkey] + ", "
                   logging.info("List of tables are not matched within between Source and Target database "+expdatabase+": "+Yellow+l_mismatches_disp)
