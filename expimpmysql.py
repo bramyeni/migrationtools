@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 600 2024-04-20 07:39:24Z bpahlawa $
+# $Id: expimpmysql.py 601 2024-04-21 03:48:25Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-20 15:39:24 +0800 (Sat, 20 Apr 2024) $
-# $Revision: 600 $
+# $Date: 2024-04-21 11:48:25 +0800 (Sun, 21 Apr 2024) $
+# $Revision: 601 $
 
 import re
 from string import *
@@ -608,16 +608,22 @@ def create_table():
                  charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;|]*",line)
                  if (charset!=[] and tblname!=[]):
                      tblcharset[tblname[0].lower()]=charset[0]
+             if (line.find("ENGINE=") != -1):
+                 engine=re.findall("ENGINE=([a-zA-Z0-9]+)[ |;|]*",line)
+                     
              try:
                 curcrtable.execute(createtable+line)
                 impconnection.commit()
              except (Exception,pymysql.Error) as error:
-                if str(error).find("Foreign key constraint is incorrectly formed"):
+                if re.findall("Foreign key constraint is incorrectly formed",str(error))!=[]:
                    crtblfailed.append(createtable+line) 
-                elif not str(error[1]).find("already exists"):
-                   logging.error("\033[1;31;40m"+str(error))
+                elif re.findall("already exists",str(error))!=[]:
+                   pass
                 else:
-                   logging.error('create_table: Error occured: '+str(error))
+                   if (engine!=[] and tblname!=[]):
+                      logging.error(Red+'create_table: Error occured: '+str(error)+" ENGINE="+engine[0])
+                   else:
+                      logging.error(Red+'create_table: Error occured: '+str(error))
                 impconnection.rollback()
                 pass
              createtable=""
@@ -986,7 +992,7 @@ def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
 
 #procedure to import data
 def import_data():
-    global imptables,config,configfile,curimptbl,gicharset,improwchunk,implocktimeout,sharedvar,resultlist,impoldvars,impdatabase
+    global imptables,config,configfile,curimptbl,gicharset,improwchunk,implocktimeout,sharedvar,resultlist,impoldvars,impdatabase,g_dblist
     #Loading import configuration from mysqlconfig.ini file
     impserver = read_config('import','servername')
     impport = read_config('import','port')
@@ -1003,6 +1009,10 @@ def import_data():
     impuser = read_config('import','username')
     imppass = read_config('import','password')
     imppass=decode_password(imppass)
+
+    #if list of database is specified then use the parameter rather than config file
+    if g_dblist!=None:
+        impdatabase=g_dblist
 
     l_impalldb=[]
 
@@ -1049,7 +1059,7 @@ def import_data():
         if (impexcludedb!=None and impexcludedb!=""):
             if (len(impexcludedb.split(","))>1):
                 if impdatabase not in impexcludedb.split(","):
-                   logging.info("Importing database "+Yellow+l_dblist+Green)
+                   logging.info("Importing database "+Yellow+impdatabase+Green)
                    l_impalldb.append(impdatabase)
                 else:
                    logging.info("Excluding database "+Cyan+impexcludedb+Green)
@@ -1946,10 +1956,10 @@ def gather_database_charset(lserver,lport,ldatabase,targetdb,**kwargs):
           config.write(cfgfile)
 
     if test_connection(luser,lpass,lserver,lport,ldatabase,lca)==1:
-       logging.error("\033[1;31;40mSorry, user: \033[1;36;40m"+luser+"\033[1;31;40m not available or password was wrong!!, please check your config file :"+configfile)
+       logging.error("\033[1;31;40mSorry, user: \033[1;36;40m"+luser+"\033[1;31;40m not available or password was wrong!!, please check specified parameters or a config file :"+configfile)
        sys.exit(2)
 
-    logging.info("Gathering character set information from database "+ldatabase)
+    logging.info("Gathering Character set information from database "+ldatabase)
     try:
        lconn = pymysql.connect(user=luser,
                                 password=lpass,
@@ -2149,15 +2159,15 @@ def dblist_expimp(l_impalldb,l_expalldb):
            
 
     if (l_cmpalldb==[]):
-        logging.info(Yellow+"Unable to find Source Database "+','.join(str(l_impalldb))+", Please check the following:")
+        logging.info(Yellow+"Unable to find Source Database(s), Please check the following:")
         logging.info(Yellow+"- Database name is not listed in the config file, check [export] section!")
-        logging.info(Yellow+"- Source Database "+','.join(str(l_impalldb))+" is not available at "+expserver+Green)
+        logging.info(Yellow+"- Specified Source Database(s) is/are not available"+Green)
         exit()
 
     return(l_cmpalldb)
 
 def compare_database():
-    global cfgmode,retdblist
+    global cfgmode,retdblist,g_dblist
     expserver = read_config('export','servername')
     expport = read_config('export','port')
     expdatabase = read_config('export','database')
@@ -2184,6 +2194,11 @@ def compare_database():
     if (imppass==''):
        imppass=' ';
     imppass=decode_password(imppass)
+
+    #if list of database is specified then use the parameter rather than config file
+    if g_dblist!=None:
+        expdatabase=g_dblist
+        impdatabase=g_dblist
 
     l_cmpalldb=[]
     retdblist={}
@@ -2314,6 +2329,7 @@ def compare_database():
    
                if (trows!=srows):
                   logging.info("\033[1;31;40mNumber of rows source database :"+expdatabase+" is different than target database :"+impdatabase)
+                  l_mismatches[tbl[0]]="X"
                   continue
    
                i=1
@@ -2344,8 +2360,8 @@ def compare_database():
            if (l_mismatches!={}):
               l_mismatches_disp=""
               for l_mismkey in l_mismatches:
-                  l_mismatches_disp += l_mismkey + ": " + l_mismatches[l_mismkey] + ", "
-                  logging.info("List of tables are not matched within between Source and Target database "+expdatabase+": "+Yellow+l_mismatches_disp)
+                  l_mismatches_disp += l_mismkey + ": " + str(l_mismatches[l_mismkey]) + ", "
+                  logging.info("List of tables are not matched within between Source and Target database "+expdatabase+": "+Yellow+l_mismatches_disp[:-2])
            else:
               logging.info("All tables within Source and Target database "+expdatabase+": "+Yellow+" are MATCHED!")
 
@@ -2353,10 +2369,10 @@ def compare_database():
        except (Exception,pymysql.Error) as error:
            logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
            if (sconn):
-               sconn.close()
+              sconn.close()
            if (tconn):
-               tconn.close()
-           continue
+              tconn.close()
+           pass
 
 #callback after exporting data
 def cb(result):
@@ -2436,9 +2452,9 @@ def get_params():
 
 #procedure to export data
 def export_data(**kwargs):
-    global exptables,config,configfile,curtblinfo,crtblfile,expmaxrowsperfile,expdatabase,dtnow,expconnection,gecharset,gecollation,resultlist,expoldvars,mainlogfilename,tblcharset,forcexp
+    global exptables,config,configfile,curtblinfo,crtblfile,expmaxrowsperfile,expdatabase,dtnow,expconnection,gecharset,gecollation,resultlist,expoldvars,mainlogfilename,tblcharset,forcexp,g_dblist
     #Read configuration from mysqlconfig.ini file
-    logging.debug("Read configuration from mysqlconfig.ini file")
+    logging.info("Read configuration from mysqlconfig.ini file")
 
     expserver = read_config('export','servername')
     expport = read_config('export','port')
@@ -2453,6 +2469,10 @@ def export_data(**kwargs):
        exppass=' ';
     exppass=decode_password(exppass)
     exppass = decode_password(read_config('export','password'))
+
+    #if list of database is specified then use the parameter rather than config file
+    if g_dblist!=None:
+        expdatabase=g_dblist
 
     l_expalldb=[]
     retdblist[cfgmode]=[]
@@ -2474,10 +2494,12 @@ def export_data(**kwargs):
                  l_expalldb.remove(l_dblist)
 
     if (l_expalldb==[]):
-        logging.info("Unable to find Database "+','.join(str(l_expalldb))+", Please check the following:")
+        logging.info("Unable to find Database, Please check the following:")
         logging.info("- Database name is not listed in the config file, check [export] section!")
-        logging.info("- Database "+','.join(str(l_expalldb))+" is/are not available at "+expserver)
+        logging.info("- Parameter(s) is/are not specified correctly")
+        logging.info("- Database(s) is/are not available at "+expserver)
         exit()
+
 
     for expdatabase in l_expalldb:
         tblcharset={}
@@ -2711,8 +2733,9 @@ def main():
     global impconnection
     global config,configfile
     global esc,sep1,eol,crlf,quote
-    global dblist,forcexp
+    global dblist,forcexp,g_dblist
     dblist=None
+    g_dblist=None
     verbose = False
     forcexp=False
     #disctionary of character set with key= "import" or "export" and value="character set"
@@ -2748,6 +2771,8 @@ def main():
             if (mode=="dbinfo"):
                mode = "dblistinfo"
                dblist = a
+            elif (mode in ["exportclient","exportserver","import","dbcompare"]):
+               g_dblist = a
             else:
                mode = "dblist"
         elif o in ("-a","--all-info"):
