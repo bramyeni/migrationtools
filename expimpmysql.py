@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 601 2024-04-21 03:48:25Z bpahlawa $
+# $Id: expimpmysql.py 602 2024-04-21 04:13:43Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-21 11:48:25 +0800 (Sun, 21 Apr 2024) $
-# $Revision: 601 $
+# $Date: 2024-04-21 12:13:43 +0800 (Sun, 21 Apr 2024) $
+# $Revision: 602 $
 
 import re
 from string import *
@@ -1016,25 +1016,39 @@ def import_data():
 
     l_impalldb=[]
 
+    #if databases are separarted by comma
     if (len(impdatabase.split(","))>1):
+        #convert to list and loop
         for l_dblist in impdatabase.split(","):
+           #check whether the directory exists (which means exported files exist by checking *.gz and *.sql files)
            if (glob.glob(l_dblist+"/*.gz")!=[] and glob.glob(l_dblist+"/*.sql")!=[]):
+              #if there are databases to be excluded
               if (impexcludedb!=None and impexcludedb!=""):
+                  #list all excluded databases separated by comma
                   if (len(impexcludedb.split(","))>1):
+                      #if database is not listed in the excluded database then add this database into the list
                       if l_dblist not in impexcludedb.split(","):
                          logging.info("Importing database "+Yellow+l_dblist+Green)
                          l_impalldb.append(l_dblist)
+                      #else ignore
                       else:
                          logging.info("Excluding database "+Cyan+l_dblist+Green)
+                  #there is a single database to be excluded
                   else:
+                      #if database is not the same as the excluded database then ignore, else add into the list
                       if (l_dblist!=impexcludedb):
                          logging.info("Importing database "+Yellow+l_dblist+Green)
                          l_impalldb.append(l_dblist)
                       else:
                          logging.info("Excluding database "+Cyan+impexcludedb+Green)
+              #if there is no excluded database then add all into the list
+              else:
+                  logging.info("Importing database "+Yellow+l_dblist+Green)
+                  l_impalldb.append(l_dblist)
            else:
               logging.info("Exported files for database "+Yellow+dblist+Green+" are not complete, consider re-exporting..")
 
+    #the same logic as the above for all databases
     elif impdatabase=="all":
         if (glob.glob("*/*.gz")!=[] and glob.glob("*/*.sql")!=[]):
             thesqlfile=glob.glob("*/"+crdbfilename)
@@ -1053,17 +1067,36 @@ def import_data():
                          l_impalldb.append(l_dblist)
                       else:
                          logging.info("Excluding database "+Cyan+impexcludedb+Green)
+               else:
+                  logging.info("Importing database "+Yellow+l_dblist+Green)
+                  l_impalldb.append(l_dblist)
         else:
            logging.info("Exported files are not complete, consider re-exporting..")
+    #the same logic as the above but for single database
     else:
-        if (impexcludedb!=None and impexcludedb!=""):
-            if (len(impexcludedb.split(","))>1):
-                if impdatabase not in impexcludedb.split(","):
-                   logging.info("Importing database "+Yellow+impdatabase+Green)
-                   l_impalldb.append(impdatabase)
-                else:
-                   logging.info("Excluding database "+Cyan+impexcludedb+Green)
+        if (glob.glob(impdatabase+"/*.gz")!=[] and glob.glob(impdatabase+"/*.sql")!=[]):
+            thesqlfile=glob.glob(impdatabase+"/"+crdbfilename)
+            for filelst in thesqlfile:
+               l_dblist=os.path.dirname(filelst)
+               if (impexcludedb!=None and impexcludedb!=""):
+                  if (len(impexcludedb.split(","))>1):
+                      if l_dblist not in impexcludedb.split(","):
+                         logging.info("Importing database "+Yellow+l_dblist+Green)
+                         l_impalldb.append(l_dblist)
+                      else:
+                         logging.info("Excluding database "+Cyan+l_dblist+Green)
+                  else:
+                      if (l_dblist!=impexcludedb):
+                         logging.info("Importing database "+Yellow+l_dblist+Green)
+                         l_impalldb.append(l_dblist)
+                      else:
+                         logging.info("Excluding database "+Cyan+impexcludedb+Green)
+               else:
+                  logging.info("Importing database "+Yellow+l_dblist+Green)
+                  l_impalldb.append(l_dblist)
 
+        else:
+           logging.info("Exported files are not complete, consider re-exporting..")
 
     for impdatabase in l_impalldb: 
 
