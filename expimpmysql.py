@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 602 2024-04-21 04:13:43Z bpahlawa $
+# $Id: expimpmysql.py 603 2024-04-21 12:00:56Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-21 12:13:43 +0800 (Sun, 21 Apr 2024) $
-# $Revision: 602 $
+# $Date: 2024-04-21 20:00:56 +0800 (Sun, 21 Apr 2024) $
+# $Revision: 603 $
 
 import re
 from string import *
@@ -2161,6 +2161,8 @@ def reconnect(ruser,rpass,rserver,rport,rcharset,rca,rdatabase):
                            port=int(rport),
                            charset=rcharset,
                            ssl_ca=rca,
+                           read_timeout=1000,
+                           max_allowed_packet=1073741824,
                            database=rdatabase)
         return(conn)
 
@@ -2336,32 +2338,66 @@ def compare_database():
               alltbls=scursor.fetchall()
    
            tcursor=tconn.cursor()
+
+           currtime=None
+           #getting charset from table
+           #for tbl in alltbls:
+           #    currtime=str(datetime.datetime.now())
+           #    print(White+"\r"+currtime[0:23]+Green+" Retrieving charset from "+Cyan+tbl[0]+" "+Coloff,end="",flush=True)
+           #    tcursor.execute("show create table `"+tbl[0]+"`")
+           #    chkcharset=tcursor.fetchone()[1]
+           #    charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;|]*",chkcharset)
+           #    tblcharset[tbl[0]]=charset[0]
+           #    print(charset[0],end="",flush=True)
+
+           #print("\r")
    
            l_mismatches={}
            for tbl in alltbls:
-               ccursor=sconn.cursor()
-               ccursor.execute("show create table `"+tbl[0]+"`")
-               chkcharset=ccursor.fetchone()[1]
-               charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;|]*",chkcharset)
-               if (gecharset!=charset[0]):
-                   gecharset=charset[0]
-                   gicharset=charset[0]
-                   if (sconn):
-                      sconn.close()
-                   if (tconn):
-                      tconn.close()
-                   sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
-                   tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
-                   scursor=sconn.cursor()
-                   tcursor=tconn.cursor()
+               #if (gecharset!=tblcharset[tbl[0]]):
+               #    gecharset=tblcharset[tbl[0]]
+               #    gicharset=tblcharset[tbl[0]]
+               #    if (sconn):
+               #       sconn.close()
+               #    if (tconn):
+               #       tconn.close()
+               #    sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
+               #    tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
+               #    scursor=sconn.cursor()
+               #    tcursor=tconn.cursor()
    
                logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
                query="select * from `"+tbl[0]+"` order by 1"
-               srows=scursor.execute(query)
-               trows=tcursor.execute(query)
+               try:
+                  srows=scursor.execute(query)
+               except (Exception,pymysql.Error) as error:
+                  if re.findall("codec",str(error))!=[]:
+                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+                      sconn.close
+                      if gecharset in "utf":
+                          gecharset="latin1"
+                      else:
+                          gecharset="utf8"
+                      sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
+                      scursor=sconn.cursor()
+                      srows=scursor.execute(query)
+
+               try:
+                  trows=tcursor.execute(query)
+               except (Exception,pymysql.Error) as error:
+                  if re.findall("codec",str(error))!=[]:
+                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+                      tconn.close
+                      if gicharset in "utf":
+                          gicharset="latin1"
+                      else:
+                          gicharset="utf8"
+                      tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
+                      tcursor=tconn.cursor()
+                      trows=tcursor.execute(query)
    
                if (trows!=srows):
-                  logging.info("\033[1;31;40mNumber of rows source database :"+expdatabase+" is different than target database :"+impdatabase)
+                  logging.info("\033[1;31;40mNumber of rows source database :"+expdatabase+"@"+expserver+", Table :"+tbl[0]+" is different than target database :"+impdatabase+"@"+impserver)
                   l_mismatches[tbl[0]]="X"
                   continue
    
@@ -2371,11 +2407,11 @@ def compare_database():
                for i in range(1,srows+1):
                    sdata=str(scursor.fetchone())
                    tdata=str(tcursor.fetchone())
-                   #print(sdata)
-                   #print(tdata)
                    shash=xxhash.xxh64_hexdigest(sdata)
                    thash=xxhash.xxh64_hexdigest(tdata)
                    if (shash!=thash):
+                      print(sdata)
+                      print(tdata)
                       l_mism=l_mism+1
                       currtime=str(datetime.datetime.now())
                       print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCHED!! (charset="+gecharset+")"+Coloff,end="\n",flush=True)
@@ -2394,7 +2430,7 @@ def compare_database():
               l_mismatches_disp=""
               for l_mismkey in l_mismatches:
                   l_mismatches_disp += l_mismkey + ": " + str(l_mismatches[l_mismkey]) + ", "
-                  logging.info("List of tables are not matched within between Source and Target database "+expdatabase+": "+Yellow+l_mismatches_disp[:-2])
+              logging.info("List of tables are not matched within between Source and Target database "+expdatabase+": "+Yellow+l_mismatches_disp[:-2])
            else:
               logging.info("All tables within Source and Target database "+expdatabase+": "+Yellow+" are MATCHED!")
 
