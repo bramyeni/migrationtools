@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 605 2024-04-22 00:50:57Z bpahlawa $
+# $Id: expimpmysql.py 606 2024-04-22 02:05:28Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-22 08:50:57 +0800 (Mon, 22 Apr 2024) $
-# $Revision: 605 $
+# $Date: 2024-04-22 10:05:28 +0800 (Mon, 22 Apr 2024) $
+# $Revision: 606 $
 
 import re
 from string import *
@@ -2375,8 +2375,8 @@ def compare_database():
                try:
                   srows=scursor.execute(query)
                except (Exception,pymysql.Error) as error:
-                  if re.findall("codec",str(error))!=[]:
-                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+                  if re.findall("codec|Connection reset by peer",str(error))!=[]:
+                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Source DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
                       sconn.close
                       if gecharset in "utf8":
                           gecharset="utf8mb4"
@@ -2389,8 +2389,8 @@ def compare_database():
                try:
                   trows=tcursor.execute(query)
                except (Exception,pymysql.Error) as error:
-                  if re.findall("codec",str(error))!=[]:
-                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+                  if re.findall("codec|Connection reset by peer",str(error))!=[]:
+                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Target DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
                       tconn.close
                       if gicharset in "utf8":
                           gicharset="utf8mb4"
