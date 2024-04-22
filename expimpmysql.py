@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 604 2024-04-22 00:22:28Z bpahlawa $
+# $Id: expimpmysql.py 605 2024-04-22 00:50:57Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-22 08:22:28 +0800 (Mon, 22 Apr 2024) $
-# $Revision: 604 $
+# $Date: 2024-04-22 08:50:57 +0800 (Mon, 22 Apr 2024) $
+# $Revision: 605 $
 
 import re
 from string import *
@@ -2328,7 +2328,10 @@ def compare_database():
    
        tconn=None
        sconn=None
-   
+
+       gicharset="utf8"
+       gecharset="utf8"
+
        try:
            sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
            tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
@@ -2364,31 +2367,8 @@ def compare_database():
            tcursor=tconn.cursor()
 
            currtime=None
-           #getting charset from table
-           #for tbl in alltbls:
-           #    currtime=str(datetime.datetime.now())
-           #    print(White+"\r"+currtime[0:23]+Green+" Retrieving charset from "+Cyan+tbl[0]+" "+Coloff,end="",flush=True)
-           #    tcursor.execute("show create table `"+tbl[0]+"`")
-           #    chkcharset=tcursor.fetchone()[1]
-           #    charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;|]*",chkcharset)
-           #    tblcharset[tbl[0]]=charset[0]
-           #    print(charset[0],end="",flush=True)
-
-           #print("\r")
-   
            l_mismatches={}
            for tbl in alltbls:
-               #if (gecharset!=tblcharset[tbl[0]]):
-               #    gecharset=tblcharset[tbl[0]]
-               #    gicharset=tblcharset[tbl[0]]
-               #    if (sconn):
-               #       sconn.close()
-               #    if (tconn):
-               #       tconn.close()
-               #    sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
-               #    tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
-               #    scursor=sconn.cursor()
-               #    tcursor=tconn.cursor()
    
                logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
                query="select * from `"+tbl[0]+"` order by 1"
@@ -2398,8 +2378,8 @@ def compare_database():
                   if re.findall("codec",str(error))!=[]:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
                       sconn.close
-                      if gecharset in "utf":
-                          gecharset="latin1"
+                      if gecharset in "utf8":
+                          gecharset="utf8mb4"
                       else:
                           gecharset="utf8"
                       sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
@@ -2412,8 +2392,8 @@ def compare_database():
                   if re.findall("codec",str(error))!=[]:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
                       tconn.close
-                      if gicharset in "utf":
-                          gicharset="latin1"
+                      if gicharset in "utf8":
+                          gicharset="utf8mb4"
                       else:
                           gicharset="utf8"
                       print(gicharset)
