@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 603 2024-04-21 12:00:56Z bpahlawa $
+# $Id: expimpmysql.py 604 2024-04-22 00:22:28Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-21 20:00:56 +0800 (Sun, 21 Apr 2024) $
-# $Revision: 603 $
+# $Date: 2024-04-22 08:22:28 +0800 (Mon, 22 Apr 2024) $
+# $Revision: 604 $
 
 import re
 from string import *
@@ -607,10 +607,14 @@ def create_table():
              if (line.find("CHARSET=") != -1):
                  charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;|]*",line)
                  if (charset!=[] and tblname!=[]):
-                     tblcharset[tblname[0].lower()]=charset[0]
+                     if (tblcharset!={}):
+                        if "utf8" not in tblcharset.get(tblname[0].lower(),""):
+                           tblcharset[tblname[0].lower()]=charset[0]
+                     else:
+                        tblcharset[tblname[0].lower()]=charset[0]
              if (line.find("ENGINE=") != -1):
                  engine=re.findall("ENGINE=([a-zA-Z0-9]+)[ |;|]*",line)
-                     
+
              try:
                 curcrtable.execute(createtable+line)
                 impconnection.commit()
@@ -630,12 +634,19 @@ def create_table():
           else:
              if (line.find("CREATE TABLE") != -1):
                  tblname=re.findall("CREATE TABLE `(.*)` ",line)
+             if (line.find("CHARACTER") != -1):
+                 charset=re.findall("CHARACTER SET ([a-zA-Z0-9]+) COLLATE.*",line)
+                 if (charset!=[] and tblname!=[]):
+                     if (tblcharset!={}):
+                        if "utf8" not in tblcharset.get(tblname[0].lower(),""):
+                           tblcharset[tblname[0].lower()]=charset[0]
+                     else:
+                        tblcharset[tblname[0].lower()]=charset[0]
              if createtable=="":
                 logging.info("\033[1;33;40mExecuting...."+line[:-2])
              createtable+=line
 
        fcrtable.close()
-
        createtable=""
        curcrtable.execute("SET FOREIGN_KEY_CHECKS=1;")
     
@@ -807,11 +818,13 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
              return
           
 
-       logging.info(mprocessid+" Inserting data from \033[1;34;40m"+dirname+"/"+tablefile+".csv"+"\033[1;37;40m to table \033[1;34;40m"+tablename)
+       logging.info(mprocessid+" Inserting data from \033[1;34;40m"+dirname+"/"+tablefile+".csv"+"\033[1;37;40m to table \033[1;34;40m"+tablename+" (charset="+tblcharset[tablename]+")")
 
 
        curinsdata.execute("SET FOREIGN_KEY_CHECKS=0;")
        curinsdata.execute("set innodb_lock_wait_timeout="+implocktimeout)
+
+       tblcharset[tablename]="utf8"
        #curinsdata.execute("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table "+impdatabase+"."+tablename+" fields terminated by '\\t' ignore 1 LINES;")
        curinsdata.execute("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
        testwr=open(dirname+"/"+tablefile+"-loadcmd.txt","w")
@@ -954,6 +967,7 @@ def usage():
     print("   -e, --export-to-client        Export using Client Code")
     print("   -E, --export-to-server        Export using Server Mode (very fast)")
     print("   -f, --force-export            Remove previous exported directory and its files")
+    print("   -r, --remove-db               Remove database (drop and re-create)")
     print("   -i, --import                  Import Mode")
     print("   -s, --script                  Generate Scripts")
     print("   -d, --dbinfo  -t, --db-list=  Gather Database Info (all|list|db1,db2,dbN)")
@@ -1156,6 +1170,7 @@ def import_data():
         global sqllisttables
         global sqltablesizes
         global impconnection
+
         try:
            impconnection = pymysql.connect(user=impuser,
                                             password=imppass,
@@ -1447,11 +1462,11 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
         charset="utf-8"
         dbcharset="utf8"
     elif (tblcharset[tbldata].find("latin") != -1):
-        charset="ISO-8859-1"
+        charset="utf-8"
         dbcharset="utf8"
     else:
-        charset="ISO-8859-1"
-        dbcharset=expcharset
+        charset="utf-8"
+        dbcharset="utf8"
 
 
     try:
@@ -1486,7 +1501,7 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
 
 
        allrecords=spcursor.fetchall_unbuffered()
-       
+
        for records in allrecords:
           rowcount+=1
           fields=""
@@ -1748,9 +1763,18 @@ def create_database(databasename,auser,apass,aserver,aport,gecharset,aca):
            with open(databasename+"/"+crdbfilename, 'rt') as dbscript:
                acursor.execute(dbscript.readline())
         else:
-           logging.info("Database "+Cyan+databasename+Green+" already exist")
-        if (aconn):
-            aconn.close()
+           if g_removedb==True:
+               try:
+                   logging.info("Dropping database "+Blue+databasename)
+                   acursor.execute("drop database `"+databasename+"`")
+                   logging.info("Re-creating database "+Blue+databasename)
+                   with open(databasename+"/"+crdbfilename, 'rt') as dbscript:
+                       acursor.execute(dbscript.readline())
+               except (Exception,pymysql.Error) as error:
+                   logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+                   pass
+           else:
+               logging.info("Database "+Cyan+databasename+Green+" already exist")
 
     except (Exception,pymysql.Error) as error:
         logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
@@ -2336,7 +2360,7 @@ def compare_database():
               querytbl="show tables"
               scursor.execute(querytbl)
               alltbls=scursor.fetchall()
-   
+
            tcursor=tconn.cursor()
 
            currtime=None
@@ -2392,13 +2416,14 @@ def compare_database():
                           gicharset="latin1"
                       else:
                           gicharset="utf8"
+                      print(gicharset)
                       tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
                       tcursor=tconn.cursor()
                       trows=tcursor.execute(query)
    
                if (trows!=srows):
-                  logging.info("\033[1;31;40mNumber of rows source database :"+expdatabase+"@"+expserver+", Table :"+tbl[0]+" is different than target database :"+impdatabase+"@"+impserver)
-                  l_mismatches[tbl[0]]="X"
+                  logging.info("\033[1;31;40mNumber of rows ("+str(srows)+") source database :"+expdatabase+"@"+expserver+", Table :"+tbl[0]+" is different than target database :"+impdatabase+"@"+impserver+" ("+str(trows)+")")
+                  l_mismatches[tbl[0]]=str(srows)+":"+str(trows)
                   continue
    
                i=1
@@ -2410,8 +2435,8 @@ def compare_database():
                    shash=xxhash.xxh64_hexdigest(sdata)
                    thash=xxhash.xxh64_hexdigest(tdata)
                    if (shash!=thash):
-                      print(sdata)
-                      print(tdata)
+                      #print("\r"+sdata)
+                      #print(tdata)
                       l_mism=l_mism+1
                       currtime=str(datetime.datetime.now())
                       print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCHED!! (charset="+gecharset+")"+Coloff,end="\n",flush=True)
@@ -2439,8 +2464,12 @@ def compare_database():
            logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
            if (sconn):
               sconn.close()
+           sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
+           scursor=sconn.cursor()
            if (tconn):
               tconn.close()
+           tconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
+           tcursor=tconn.cursor()
            pass
 
 #callback after exporting data
@@ -2792,13 +2821,13 @@ def main():
     #initiate signal handler, it will capture if user press ctrl+c key, the program will terminate
     handler = signal.signal(signal.SIGINT, trap_signal)
     try:
-       opts, args=getopt.getopt(sys.argv[1:], "hl:eEisvdt:acof", ["help","log=","export-to-client","export-to-server","import","script","dbinfo","db-list=","all-info","db-compare","clone-variables","force-export"])
+       opts, args=getopt.getopt(sys.argv[1:], "hl:eEisvdt:acofr", ["help","log=","export-to-client","export-to-server","import","script","dbinfo","db-list=","all-info","db-compare","clone-variables","force-export","remove-db"])
     except (Exception,getopt.GetoptError) as error:
        logging.error("\n\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        usage()
        sys.exit(2)
 
-    global mode,cfgmode,tblcharset,retdblist
+    global mode,cfgmode,tblcharset,retdblist,g_removedb
     global impconnection
     global config,configfile
     global esc,sep1,eol,crlf,quote
@@ -2807,6 +2836,7 @@ def main():
     g_dblist=None
     verbose = False
     forcexp=False
+    g_removedb=False
     #disctionary of character set with key= "import" or "export" and value="character set"
     tblcharset={}
     #dictionary of database list with key="import" or "export" and value="database"
@@ -2827,6 +2857,8 @@ def main():
             mode = "import"
         elif o in ("-f","--force-export"):
             forcexp = True
+        elif o in ("-r","--remove-db"):
+            g_removedb = True
         elif o in ("-s","--script"):
             mode = "script"
         elif o in ("-l","--log"):
