@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 606 2024-04-22 02:05:28Z bpahlawa $
+# $Id: expimpmysql.py 607 2024-04-22 05:22:29Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-22 10:05:28 +0800 (Mon, 22 Apr 2024) $
-# $Revision: 606 $
+# $Date: 2024-04-22 13:22:29 +0800 (Mon, 22 Apr 2024) $
+# $Revision: 607 $
 
 import re
 from string import *
@@ -2403,7 +2403,7 @@ def compare_database():
    
                if (trows!=srows):
                   logging.info("\033[1;31;40mNumber of rows ("+str(srows)+") source database :"+expdatabase+"@"+expserver+", Table :"+tbl[0]+" is different than target database :"+impdatabase+"@"+impserver+" ("+str(trows)+")")
-                  l_mismatches[tbl[0]]=str(srows)+":"+str(trows)
+                  l_mismatches[tbl[0]]="S"+str(srows)+"|T"+str(trows)
                   continue
    
                i=1
@@ -2801,7 +2801,7 @@ def main():
     #initiate signal handler, it will capture if user press ctrl+c key, the program will terminate
     handler = signal.signal(signal.SIGINT, trap_signal)
     try:
-       opts, args=getopt.getopt(sys.argv[1:], "hl:eEisvdt:acofr", ["help","log=","export-to-client","export-to-server","import","script","dbinfo","db-list=","all-info","db-compare","clone-variables","force-export","remove-db"])
+       opts, args=getopt.getopt(sys.argv[1:], "hl:eEisvdt:acofrC", ["help","log=","export-to-client","export-to-server","import","script","dbinfo","db-list=","all-info","db-compare","clone-variables","force-export","remove-db","complete-migration"])
     except (Exception,getopt.GetoptError) as error:
        logging.error("\n\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        usage()
@@ -2852,12 +2852,14 @@ def main():
             if (mode=="dbinfo"):
                mode = "dblistinfo"
                dblist = a
-            elif (mode in ["exportclient","exportserver","import","dbcompare"]):
+            elif (mode in ["exportclient","exportserver","import","dbcompare","completemigration"]):
                g_dblist = a
             else:
                mode = "dblist"
         elif o in ("-a","--all-info"):
             mode = "allinfo"
+        elif o in ("-C","--complete-migration"):
+            mode = "completemigration"
         elif o in ("-o","--clone-variables"):
             mode = "clonevar"
         elif o in ("-c","--db-compare"):
@@ -2919,6 +2921,14 @@ def main():
           get_all_info()
        elif mode=="dbcompare":
           logging.info("Comparing schema/database......")
+          compare_database()
+       elif mode=="completemigration":
+          logging.info("Complete Migration Export => Import => Compare schema/database......")
+          forcexp=True
+          cfgmode='export'
+          export_data(spool='toclient')
+          cfgmode='import'
+          import_data()
           compare_database()
        elif mode=="clonevar":
           logging.info("Cloning variables from source to target database......")
