@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 610 2024-04-23 08:29:53Z bpahlawa $
+# $Id: expimpmysql.py 611 2024-04-23 14:38:47Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-23 16:29:53 +0800 (Tue, 23 Apr 2024) $
-# $Revision: 610 $
+# $Date: 2024-04-23 22:38:47 +0800 (Tue, 23 Apr 2024) $
+# $Revision: 611 $
 
 import re
 from string import *
@@ -314,7 +314,7 @@ def debugit(l_param,l_value):
 
 #procedure to trap signal
 def trap_signal(signum, stack):
-    global mode,expoldvars,sharedvar,impoldvars
+    global cfgmode,expoldvars,sharedvar,impoldvars
     logging.info("Ctrl-C has been pressed!")
 
     try:
@@ -871,33 +871,35 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
 
        l_strcol="("
        l_setcmd="SET "
+
+       l_allcols=None
+       
+       with open(dirname+"/"+tablefile+".csv","rt") as fread:
+           l_allcols=fread.readline()
+
        for l_dtype in g_tblbinlob[tablename]:
            if re.findall(".*(lob|binary).*",g_tblbinlob[tablename][l_dtype])!=[]:
-               l_strcol+="@"+l_dtype+","
                l_setcmd+=l_dtype+" = UNHEX(@"+l_dtype+"), "
-           else:
-               l_strcol+=l_dtype+","
-       l_strcol=l_strcol[:-1]+")"
+               l_allcols=l_allcols.replace(l_dtype,"@"+l_dtype)
        if l_setcmd=="SET ":
           l_setcmd=""
        else:
           l_setcmd=l_setcmd[:-2]
 
+       l_allcols=l_allcols.replace(eol+crlf,"")
+
        l_sqlquery="""LOAD DATA LOCAL INFILE '{0}' 
        INTO TABLE `{1}`.`{2}`
        CHARACTER SET {5} fields terminated by '{6}' OPTIONALLY ENCLOSED BY '{7}' ESCAPED BY '{8}' LINES TERMINATED BY '{9}'
-       {3}
+       IGNORE 1 LINES
+       ({3})
        {4};
 """
 
-       testwr=open(dirname+"/"+tablefile+"-loadcmd.txt","w")
-       testwr.write(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_strcol,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
-       testwr.close()
 
-       #print(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_strcol,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
 
        #curinsdata.execute("LOAD DATA INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` "+l_strcol+l_setcmd+"CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
-       curinsdata.execute(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_strcol,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
+       curinsdata.execute(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
 
        for warnmsg in insconnection.show_warnings():
            logging.info(mprocessid+"\033[1;33;40m File "+dirname+"/"+tablefile+" "+str(warnmsg)+"\033[1;37;40m") 
@@ -912,10 +914,18 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
 
        logging.info(mprocessid+" Data from \033[1;34;40m"+dirname+"/"+filename+"\033[1;37;40m has been inserted to table \033[1;34;40m"+tablename+"\033[1;36;40m")
        os.remove(dirname+"/"+tablefile+".csv")
+
+       testwr=open(dirname+"/"+tablefile+"-loadcmd.txt","w")
+       testwr.write(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
+       testwr.close()
+       #print(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
        
        
     except (Exception,pymysql.Error) as error:
        logging.error("\033[1;31;40m"+mprocessid+" "+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+       stkerr = traceback.TracebackException.from_exception(error)
+       for allerr in stkerr.stack.format():
+           logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+allerr.replace("\n",""))
 
 
     finally:
@@ -1009,6 +1019,8 @@ def verify_data(tablefile,impuser,imppass,impserver,impport,impcharset,impdataba
 
        if (rowsfromfile<0):
           rowsfromfile=0
+       elif rowsfromfile>0:
+          rowsfromfile-=1
        if rowsfromfile==rowsfromtable:
           logging.info(mprocessid+" Table \033[1;34;40m"+tablename+"\033[0;37;40m no of rows: \033[1;36;40m"+str(rowsfromfile)+" does match!\033[1;36;40m")
           for flagfile in glob.glob(dirname+"/"+tablename+".*.flag"):
@@ -1075,7 +1087,7 @@ def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
     
 
 #procedure to import data
-def import_data():
+def import_data(**kwargs):
     global imptables,config,configfile,curimptbl,gicharset,improwchunk,implocktimeout,sharedvar,resultlist,impoldvars,impdatabase,g_dblist,g_tblbinlob
     #Loading import configuration from mysqlconfig.ini file
     impserver = read_config('import','servername')
@@ -1094,9 +1106,12 @@ def import_data():
     imppass = read_config('import','password')
     imppass=decode_password(imppass)
 
-    #if list of database is specified then use the parameter rather than config file
-    if g_dblist!=None:
-        impdatabase=g_dblist
+    if (kwargs.get('insequence',None)!=None):
+        impdatabase=kwargs.get('insequence')
+    else:
+        #if list of database is specified then use the parameter rather than config file
+        if g_dblist!=None:
+           impdatabase=g_dblist
 
     l_impalldb=[]
 
@@ -1432,6 +1447,9 @@ def import_data():
            sharedvar=mproc.Value('i',0)
            resultlist=mproc.Manager().list()
            sharedvar.value=0
+
+           if listofdata[0] not in g_tblbinlob.keys():
+               g_tblbinlob =  {k.lower(): v for k, v in g_tblbinlob.items()}
     
            with mproc.Pool(processes=impparallel) as importpool:
               multiple_results = [importpool.apply_async(insert_data_from_file, args=(tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,impdatabase,impca),callback=cb) for tbldata in listofdata]
@@ -1473,10 +1491,13 @@ def import_data():
     
         except (Exception,pymysql.Error) as error:
            logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-           if(impconnection):
+        finally:
+           if (impconnection):
               curimptbl.close()
               impconnection.close()
               logging.error("\033[1;37;40mDatabase import connections are closed")
+           if (kwargs.get('insequence',None)!=None):
+              compare_database(insequence=impdatabase)
 
 def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdatabase,expca):
     global tblcharset
@@ -1584,12 +1605,13 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
 
        allrecords=spcursor.fetchall_unbuffered()
 
+       fields=""
        for records in allrecords:
           rowcount+=1
-          fields=""
           if (i==0):
              for col in spcursor.description:
-                fields+=col[0]+sep1
+                fields+=col[0]+","
+             f.write(fields[:-1]+eol+crlf)
 
           rowdata=""
           for record in records:
@@ -1623,6 +1645,7 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
           i+=1
 
        f.close()
+
 
        logging.info(mprocessid+" Total no of rows exported from table \033[1;34;40m"+tbldata+"\033[0;37;40m = \033[1;36;40m"+str(i))
 
@@ -2295,7 +2318,7 @@ def dblist_expimp(l_impalldb,l_expalldb):
 
     return(l_cmpalldb)
 
-def compare_database():
+def compare_database(**kwargs):
     global cfgmode,retdblist,g_dblist
     expserver = read_config('export','servername')
     expport = read_config('export','port')
@@ -2326,29 +2349,35 @@ def compare_database():
 
     log_result(mainlogfilename)
 
-    #if list of database is specified then use the parameter rather than config file
-    if g_dblist!=None:
-        expdatabase=g_dblist
-        impdatabase=g_dblist
-
     l_cmpalldb=[]
-    retdblist={}
 
-    cfgmode="import"
+    if (kwargs.get('insequence',None)!=None):
+        impdatabase=kwargs.get('insequence')
+        expdatabase=kwargs.get('insequence')
+        l_cmpalldb.append(expdatabase)
+    else:
+        #if list of database is specified then use the parameter rather than config file
+        if g_dblist!=None:
+           expdatabase=g_dblist
+           impdatabase=g_dblist
 
-    retdblist[cfgmode]=[]
-    check_databases(impdatabase,impuser,imppass,impserver,impport,None,impca)
+        retdblist={}
 
-    cfgmode="export"
+        cfgmode="import"
 
-    retdblist[cfgmode]=[]
-    check_databases(expdatabase,expuser,exppass,expserver,expport,None,expca)
+        retdblist[cfgmode]=[]
+        check_databases(impdatabase,impuser,imppass,impserver,impport,None,impca)
+
+        cfgmode="export"
+
+        retdblist[cfgmode]=[]
+        check_databases(expdatabase,expuser,exppass,expserver,expport,None,expca)
 
 
-    l_impalldb=retdblist["import"]
-    l_expalldb=retdblist["export"]
+        l_impalldb=retdblist["import"]
+        l_expalldb=retdblist["export"]
 
-    l_cmpalldb=dblist_expimp(l_impalldb,l_expalldb)
+        l_cmpalldb=dblist_expimp(l_impalldb,l_expalldb)
 
     for expdatabase in l_cmpalldb:
        impdatabase=expdatabase
@@ -2440,12 +2469,18 @@ def compare_database():
 
            currtime=None
            l_mismatches={}
+
            for tbl in alltbls:
-   
+
                logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
                query="select * from `"+tbl[0]+"` order by 1"
                try:
                   srows=scursor.execute(query)
+                  fields=""
+                  for col in scursor.description:
+                      fields+=col[0]+","
+                  query="select "+fields[:-1]+" from `"+tbl[0]+"` order by 1" 
+
                except (Exception,pymysql.Error) as error:
                   if re.findall("codec|Connection reset by peer",str(error))!=[]:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Source DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
@@ -2457,6 +2492,10 @@ def compare_database():
                       sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
                       scursor=sconn.cursor()
                       srows=scursor.execute(query)
+                      fields=""
+                      for col in scursor.description:
+                          fields+=col[0]+","
+                      query="select "+fields[:-1]+" from `"+tbl[0]+"` order by 1" 
                   else:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Source DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
 
@@ -2493,8 +2532,8 @@ def compare_database():
                    shash=xxhash.xxh64_hexdigest(sdata)
                    thash=xxhash.xxh64_hexdigest(tdata)
                    if (shash!=thash):
-                      #print("\r"+sdata)
-                      #print(tdata)
+                      print("\r"+sdata)
+                      print(tdata)
                       l_mism=l_mism+1
                       currtime=str(datetime.datetime.now())
                       print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCHED!! (charset="+gecharset+")"+Coloff,end="\n",flush=True)
@@ -2614,7 +2653,7 @@ def get_params():
 
 #procedure to export data
 def export_data(**kwargs):
-    global exptables,config,configfile,curtblinfo,crtblfile,expmaxrowsperfile,expdatabase,dtnow,expconnection,gecharset,gecollation,resultlist,expoldvars,tblcharset,forcexp,g_dblist
+    global exptables,config,configfile,curtblinfo,crtblfile,expmaxrowsperfile,expdatabase,dtnow,expconnection,gecharset,gecollation,resultlist,expoldvars,tblcharset,forcexp,g_dblist,cfgmode
     #Read configuration from mysqlconfig.ini file
     logging.info("Read configuration from mysqlconfig.ini file")
 
@@ -2634,13 +2673,13 @@ def export_data(**kwargs):
 
     #if list of database is specified then use the parameter rather than config file
     if g_dblist!=None:
-        expdatabase=g_dblist
+       expdatabase=g_dblist
 
     l_expalldb=[]
     retdblist[cfgmode]=[]
     check_databases(expdatabase,expuser,exppass,expserver,expport,None,expca)
 
-    l_expalldb=retdblist["export"]
+    l_expalldb=retdblist[cfgmode]
 
     for l_dblist in l_expalldb[:]:
         if (expexcludedb!=None and expexcludedb!=""):
@@ -2660,7 +2699,7 @@ def export_data(**kwargs):
         logging.info("- Database name is not listed in the config file, check [export] section!")
         logging.info("- Parameter(s) is/are not specified correctly")
         logging.info("- Database(s) is/are not available at "+expserver)
-        exit()
+        return
 
 
     for expdatabase in l_expalldb:
@@ -2852,6 +2891,9 @@ def export_data(**kwargs):
               curtblinfo.close()
               expconnection.close()
               logging.info("\033[1;37;40mDatabase export connections are closed")
+           if (kwargs.get('insequence',None)!=None):
+              cfgmode='import'
+              import_data(insequence=expdatabase)
 
 #Log result logfilename and default loglevel
 def log_result(logfilename,loglevel="INFO"):
@@ -2904,6 +2946,7 @@ def main():
     forcexp=False
     g_removedb=False
     g_tblbinlob={}
+    l_mig=[]
     #disctionary of character set with key= "import" or "export" and value="character set"
     tblcharset={}
     #dictionary of database list with key="import" or "export" and value="database"
@@ -2918,10 +2961,12 @@ def main():
             sys.exit()
         elif o in ("-e",'--export-to-client'):
             mode = "exportclient"
+            l_mig.append(mode)
         elif o in ("-E","--export-to-server"):
             mode = "exportserver"
         elif o in ("-i","--import"):
             mode = "import"
+            l_mig.append(mode)
         elif o in ("-f","--force-export"):
             forcexp = True
         elif o in ("-r","--remove-db"):
@@ -2951,12 +2996,14 @@ def main():
             mode = "clonevar"
         elif o in ("-c","--db-compare"):
             mode = "dbcompare"
+            l_mig.append(mode)
         else:
             assert False,"unhandled option"
  
     if (mode==None or mode=="dblist"):
        usage()
        sys.exit(2)
+
 
     try: 
        configfile='mysqlconfig.ini'
@@ -2979,48 +3026,51 @@ def main():
        quote=bytes.fromhex(read_config('general','quote')).decode('utf-8')
        eol=bytes.fromhex(read_config('general','endofline')).decode('utf-8')
 
-       if mode=="import":
-          logging.info("Importing data......")
-          cfgmode='import'
-          import_data()
-       elif mode=="exportclient":
-          logging.info("Exporting data to a client......")
-          cfgmode='export'
-          export_data(spool='toclient')
-       elif mode=="exportserver":
-          cfgmode='export'
-          logging.info("Exporting data to a server......")
-          export_data(spool='toserver')
-       elif mode=="script":
-          cfgmode='export'
-          logging.info("Generating database scripts......")
-          export_data()
-       elif mode=="dbinfo":
-          logging.info("Generating database information......")
-          dblist=read_config('export','database')
-          get_all_info(dblist=dblist)
-       elif mode=="dblistinfo":
-          logging.info("Generating "+dblist+" database(s) information......")
-          get_all_info(dblist=dblist)
-       elif mode=="allinfo":
-          logging.info("Gathering All information belongs to this schema/database......")
-          get_all_info()
-       elif mode=="dbcompare":
-          logging.info("Comparing schema/database......")
-          compare_database()
-       elif mode=="completemigration":
-          logging.info("Complete Migration Export => Import => Compare schema/database......")
-          forcexp=True
-          cfgmode='export'
-          export_data(spool='toclient')
-          cfgmode='import'
-          import_data()
-          compare_database()
-       elif mode=="clonevar":
-          logging.info("Cloning variables from source to target database......")
-          get_all_variables()
+       if l_mig!=[]:
+          if "exportclient" in l_mig:
+             logging.info("Exporting data to a client......")
+             cfgmode='export'
+             export_data(spool='toclient')
+   
+          if "import" in l_mig:
+             logging.info("Importing data......")
+             cfgmode='import'
+             import_data()
+   
+          if "dbcompare" in l_mig:
+             logging.info("Comparing schema/database......")
+             compare_database()
        else:
-          sys.exit()
+   
+          if mode=="exportserver":
+             cfgmode='export'
+             logging.info("Exporting data to a server......")
+             export_data(spool='toserver')
+          elif mode=="script":
+             cfgmode='export'
+             logging.info("Generating database scripts......")
+             export_data()
+          elif mode=="dbinfo":
+             logging.info("Generating database information......")
+             dblist=read_config('export','database')
+             get_all_info(dblist=dblist)
+          elif mode=="dblistinfo":
+             logging.info("Generating "+dblist+" database(s) information......")
+             get_all_info(dblist=dblist)
+          elif mode=="allinfo":
+             logging.info("Gathering All information belongs to this schema/database......")
+             get_all_info()
+          elif mode=="completemigration":
+             logging.info("Complete Migration Export => Import => Compare schema/database......")
+             cfgmode='export'
+             export_data(spool='toclient',insequence="sequence")
+          elif mode=="clonevar":
+             logging.info("Cloning variables from source to target database......")
+             get_all_variables()
+          else:
+             sys.exit()
+
+       
        log_result(mainlogfilename)
 
     except (Exception,configparser.Error) as error:
