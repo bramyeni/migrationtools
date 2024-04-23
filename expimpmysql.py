@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 611 2024-04-23 14:38:47Z bpahlawa $
+# $Id: expimpmysql.py 612 2024-04-23 15:27:42Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-23 22:38:47 +0800 (Tue, 23 Apr 2024) $
-# $Revision: 611 $
+# $Date: 2024-04-23 23:27:42 +0800 (Tue, 23 Apr 2024) $
+# $Revision: 612 $
 
 import re
 from string import *
@@ -873,9 +873,12 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
        l_setcmd="SET "
 
        l_allcols=None
+       l_nocontent=True
        
        with open(dirname+"/"+tablefile+".csv","rt") as fread:
            l_allcols=fread.readline()
+           if fread.readline():
+              l_nocontent=False 
 
        for l_dtype in g_tblbinlob[tablename]:
            if re.findall(".*(lob|binary).*",g_tblbinlob[tablename][l_dtype])!=[]:
@@ -896,29 +899,32 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
        {4};
 """
 
-
-
+       print(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
        #curinsdata.execute("LOAD DATA INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` "+l_strcol+l_setcmd+"CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
-       curinsdata.execute(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
 
-       for warnmsg in insconnection.show_warnings():
-           logging.info(mprocessid+"\033[1;33;40m File "+dirname+"/"+tablefile+" "+str(warnmsg)+"\033[1;37;40m") 
-       insconnection.commit()
-       curinsdata.execute("SET FOREIGN_KEY_CHECKS=1;")
+       if l_nocontent==False:
+          curinsdata.execute(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
+   
+          for warnmsg in insconnection.show_warnings():
+              logging.info(mprocessid+"\033[1;33;40m File "+dirname+"/"+tablefile+" "+str(warnmsg)+"\033[1;37;40m") 
+          insconnection.commit()
+          curinsdata.execute("SET FOREIGN_KEY_CHECKS=1;")
+   
+          fflag=open(dirname+"/"+filename+"-tbl.flag","wt")
+          exprowchunk = read_config('export','rowchunk')
+          fflag.write(str(exprowchunk))
+          fflag.close()
+   
+          logging.info(mprocessid+" Data from \033[1;34;40m"+dirname+"/"+filename+"\033[1;37;40m has been inserted to table \033[1;34;40m"+tablename+"\033[1;36;40m")
+   
+       else:
 
-       fflag=open(dirname+"/"+filename+"-tbl.flag","wt")
-       exprowchunk = read_config('export','rowchunk')
-       fflag.write(str(exprowchunk))
-       fflag.close()
+          logging.info(mprocessid+" NO Data from \033[1;34;40m"+dirname+"/"+filename+"\033[1;37;40m to be inserted into \033[1;34;40m"+tablename+"\033[1;36;40m")
 
-
-       logging.info(mprocessid+" Data from \033[1;34;40m"+dirname+"/"+filename+"\033[1;37;40m has been inserted to table \033[1;34;40m"+tablename+"\033[1;36;40m")
        os.remove(dirname+"/"+tablefile+".csv")
-
        testwr=open(dirname+"/"+tablefile+"-loadcmd.txt","w")
        testwr.write(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
        testwr.close()
-       #print(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
        
        
     except (Exception,pymysql.Error) as error:
@@ -1606,12 +1612,13 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
        allrecords=spcursor.fetchall_unbuffered()
 
        fields=""
+       for col in spcursor.description:
+           fields+=col[0]+","
+
+       f.write(fields[:-1]+eol+crlf)
+
        for records in allrecords:
           rowcount+=1
-          if (i==0):
-             for col in spcursor.description:
-                fields+=col[0]+","
-             f.write(fields[:-1]+eol+crlf)
 
           rowdata=""
           for record in records:
