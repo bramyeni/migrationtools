@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 612 2024-04-23 15:27:42Z bpahlawa $
+# $Id: expimpmysql.py 613 2024-04-23 16:08:25Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-23 23:27:42 +0800 (Tue, 23 Apr 2024) $
-# $Revision: 612 $
+# $Date: 2024-04-24 00:08:25 +0800 (Wed, 24 Apr 2024) $
+# $Revision: 613 $
 
 import re
 from string import *
@@ -874,8 +874,9 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
 
        l_allcols=None
        l_nocontent=True
-       
-       with open(dirname+"/"+tablefile+".csv","rt") as fread:
+
+
+       with pgzip.open(dirname+"/"+tablename+".1.csv.gz","rt", thread=0) as fread:
            l_allcols=fread.readline()
            if fread.readline():
               l_nocontent=False 
@@ -891,13 +892,22 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
 
        l_allcols=l_allcols.replace(eol+crlf,"")
 
-       l_sqlquery="""LOAD DATA LOCAL INFILE '{0}' 
-       INTO TABLE `{1}`.`{2}`
-       CHARACTER SET {5} fields terminated by '{6}' OPTIONALLY ENCLOSED BY '{7}' ESCAPED BY '{8}' LINES TERMINATED BY '{9}'
-       IGNORE 1 LINES
-       ({3})
-       {4};
+       if tablefile==tablename+".1":
+          l_sqlquery="""LOAD DATA LOCAL INFILE '{0}' 
+INTO TABLE `{1}`.`{2}`
+CHARACTER SET {5} fields terminated by '{6}' OPTIONALLY ENCLOSED BY '{7}' ESCAPED BY '{8}' LINES TERMINATED BY '{9}'
+IGNORE 1 LINES
+({3})
+{4};
 """
+       else:
+          l_sqlquery="""LOAD DATA LOCAL INFILE '{0}' 
+INTO TABLE `{1}`.`{2}`
+CHARACTER SET {5} fields terminated by '{6}' OPTIONALLY ENCLOSED BY '{7}' ESCAPED BY '{8}' LINES TERMINATED BY '{9}'
+({3})
+{4};
+"""
+
 
        print(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
        #curinsdata.execute("LOAD DATA INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` "+l_strcol+l_setcmd+"CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
