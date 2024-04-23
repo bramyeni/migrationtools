@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 609 2024-04-23 00:49:09Z bpahlawa $
+# $Id: expimpmysql.py 610 2024-04-23 08:29:53Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-23 08:49:09 +0800 (Tue, 23 Apr 2024) $
-# $Revision: 609 $
+# $Date: 2024-04-23 16:29:53 +0800 (Tue, 23 Apr 2024) $
+# $Revision: 610 $
 
 import re
 from string import *
@@ -292,6 +292,25 @@ def build_python_env(modules):
           logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
           sys.exit()
 #================================================================================================================================
+
+def debugit(l_param,l_value):
+    l_theval=None
+    try:
+        if (isinstance(l_value, bytes)):
+             l_theval=l_value.decode("utf-8")
+        elif (isinstance(l_value, float)):
+             l_theval=exp2normal(l_value)
+        elif (isinstance(l_value, int)):
+             l_theval=str(l_value)
+        elif (isinstance(l_value, type(None))):
+             l_theval="None"
+        elif (isinstance(l_value, str)):
+             l_theval=l_value
+        else:
+             l_theval=str(l_value)
+        print(l_param+" = "+l_theval)
+    except Exception as error:
+       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
 
 #procedure to trap signal
 def trap_signal(signum, stack):
@@ -596,7 +615,7 @@ def generate_create_table(tablename):
 
 #procedure to create table
 def create_table():
-    global impconnection,impdatabase,tblcharset
+    global impconnection,impdatabase,tblcharset,g_tblbinlob
     curcrtable=impconnection.cursor()
     createtable=""
     crtblfailed=[]
@@ -609,7 +628,7 @@ def create_table():
        #read line by line
        for line in fcrtable.readlines():
           #if the line has ;
-          if line.find(";") != -1:
+          if re.findall(";$",line)!=[]:
              #then check if the line has CHARSET=
              if (line.find("CHARSET=") != -1):
                  #if yes then capture the character set string using regex
@@ -624,6 +643,8 @@ def create_table():
 
              try:
                 #execute create table script
+                #debugit("createtable",createtable)
+                #debugit("line",line)
                 curcrtable.execute(createtable+line)
                 #commmit it
                 impconnection.commit()
@@ -652,6 +673,12 @@ def create_table():
              if (line.find("CREATE TABLE") != -1):
                  #get the tablename by using regex
                  tblname=re.findall("CREATE TABLE `(.*)` ",line)
+                 g_tblbinlob[tblname[0]]={}
+             else:
+                 l_colname=re.findall("^\s*`([a-zA-Z0-9_\-\"]+)` ([A-Za-z0-9\(\)]+) .*[,|\n]",line)
+                 if l_colname!=[]:
+                    g_tblbinlob[tblname[0]][l_colname[0][0]]=l_colname[0][1]
+
              #if no previous create table command then
              if createtable=="":
                 #display message
@@ -797,7 +824,7 @@ def insert_data(tablename):
 def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset,impdatabase,improwchunk,dirname,impca):
     fflag=None
     insconnection=None
-    global implocktimeout,sharedvar,tblcharset
+    global implocktimeout,sharedvar,tblcharset,g_tblbinlob
     mprocessid=(mproc.current_process()).name
     try:
        stime=datetime.datetime.now()
@@ -841,11 +868,36 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
        curinsdata.execute("set innodb_lock_wait_timeout="+implocktimeout)
 
        tblcharset[tablename]="utf8"
-       #curinsdata.execute("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table "+impdatabase+"."+tablename+" fields terminated by '\\t' ignore 1 LINES;")
-       curinsdata.execute("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
+
+       l_strcol="("
+       l_setcmd="SET "
+       for l_dtype in g_tblbinlob[tablename]:
+           if re.findall(".*(lob|binary).*",g_tblbinlob[tablename][l_dtype])!=[]:
+               l_strcol+="@"+l_dtype+","
+               l_setcmd+=l_dtype+" = UNHEX(@"+l_dtype+"), "
+           else:
+               l_strcol+=l_dtype+","
+       l_strcol=l_strcol[:-1]+")"
+       if l_setcmd=="SET ":
+          l_setcmd=""
+       else:
+          l_setcmd=l_setcmd[:-2]
+
+       l_sqlquery="""LOAD DATA LOCAL INFILE '{0}' 
+       INTO TABLE `{1}`.`{2}`
+       CHARACTER SET {5} fields terminated by '{6}' OPTIONALLY ENCLOSED BY '{7}' ESCAPED BY '{8}' LINES TERMINATED BY '{9}'
+       {3}
+       {4};
+"""
+
        testwr=open(dirname+"/"+tablefile+"-loadcmd.txt","w")
-       testwr.write("LOAD DATA LOCAL INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
+       testwr.write(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_strcol,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
        testwr.close()
+
+       #print(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_strcol,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
+
+       #curinsdata.execute("LOAD DATA INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` "+l_strcol+l_setcmd+"CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
+       curinsdata.execute(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_strcol,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
 
        for warnmsg in insconnection.show_warnings():
            logging.info(mprocessid+"\033[1;33;40m File "+dirname+"/"+tablefile+" "+str(warnmsg)+"\033[1;37;40m") 
@@ -1024,7 +1076,7 @@ def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
 
 #procedure to import data
 def import_data():
-    global imptables,config,configfile,curimptbl,gicharset,improwchunk,implocktimeout,sharedvar,resultlist,impoldvars,impdatabase,g_dblist
+    global imptables,config,configfile,curimptbl,gicharset,improwchunk,implocktimeout,sharedvar,resultlist,impoldvars,impdatabase,g_dblist,g_tblbinlob
     #Loading import configuration from mysqlconfig.ini file
     impserver = read_config('import','servername')
     impport = read_config('import','port')
@@ -1530,7 +1582,6 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
        logging.info(mprocessid+" Writing data to \033[1;34;40m"+expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz")
        f=pgzip.open(expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz","wt", thread=0)
 
-
        allrecords=spcursor.fetchall_unbuffered()
 
        for records in allrecords:
@@ -1545,7 +1596,7 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
              if (record==''):
                 rowdata=rowdata+quote+''+quote+sep1
              elif (isinstance(record, bytes)):
-                rowdata=rowdata+quote+record.decode(charset).replace(esc,esc+esc).replace(quote,esc+quote)+quote+sep1
+                rowdata=rowdata+quote+bytes.hex(record)+quote+sep1
              elif (isinstance(record, float)):
                 rowdata=rowdata+quote+exp2normal(record)+quote+sep1
              elif (isinstance(record, int)):
@@ -2448,7 +2499,7 @@ def compare_database():
                       currtime=str(datetime.datetime.now())
                       print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCHED!! (charset="+gecharset+")"+Coloff,end="\n",flush=True)
                       logging.info(query+" (select *,row_number() over () rownum from `"+tbl[0]+"`) tbl where tbl.rownum="+str(i))
-                      l_mismatches[tbl[0]]=l_mism
+                      l_mismatches[tbl[0]]=str(l_mism)
                    else:
                       currtime=str(datetime.datetime.now())
                       print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+White+"MATCHED!! (charset="+gecharset+")"+Coloff,end="",flush=True)
@@ -2457,6 +2508,12 @@ def compare_database():
                else:
                    currtime=str(datetime.datetime.now())
                    print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" NO ROWS "+Blue+Coloff+" << "+Cyan+impdatabase+Coloff)
+
+               if tbl[0] in l_mismatches.keys():
+                   logging.info(Green+"Table Data between "+Yellow+expdatabase+"."+tbl[0]+"@"+expserver+Green+" and "+Yellow+impdatabase+"."+tbl[0]+"@"+impserver+" NOT MATCHED by "+l_mismatches[tbl[0]]+" rows")
+               else:
+                   logging.info(Green+"Table Data between "+Yellow+expdatabase+"."+tbl[0]+"@"+expserver+Green+" and "+Yellow+impdatabase+"."+tbl[0]+"@"+impserver+" MATCHED!! (charset="+gecharset+")")
+
    
            if (l_mismatches!={}):
               l_mismatches_disp=""
@@ -2836,7 +2893,7 @@ def main():
        usage()
        sys.exit(2)
 
-    global mode,cfgmode,tblcharset,retdblist,g_removedb
+    global mode,cfgmode,tblcharset,retdblist,g_removedb,g_tblbinlob
     global impconnection
     global config,configfile
     global esc,sep1,eol,crlf,quote
@@ -2846,6 +2903,7 @@ def main():
     verbose = False
     forcexp=False
     g_removedb=False
+    g_tblbinlob={}
     #disctionary of character set with key= "import" or "export" and value="character set"
     tblcharset={}
     #dictionary of database list with key="import" or "export" and value="database"
