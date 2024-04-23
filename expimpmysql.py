@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 607 2024-04-22 05:22:29Z bpahlawa $
+# $Id: expimpmysql.py 609 2024-04-23 00:49:09Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-22 13:22:29 +0800 (Mon, 22 Apr 2024) $
-# $Revision: 607 $
+# $Date: 2024-04-23 08:49:09 +0800 (Tue, 23 Apr 2024) $
+# $Revision: 609 $
 
 import re
 from string import *
@@ -117,6 +117,8 @@ WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 
 sOI=" "
 #global datetime
 dtnow=None
+#mainlogfilename
+mainlogfilename='expimpmysql.log'
 #Character set and collation of source database
 crcharset='charcollation.info'
 #database script's filename
@@ -600,54 +602,68 @@ def create_table():
     crtblfailed=[]
     logging.info("Creating tables from the script")
     try:
+       #read the create table script
        fcrtable = open(impdatabase+"/"+crtblfilename,"r")
+       #disable foreign key checks
        curcrtable.execute("SET FOREIGN_KEY_CHECKS=0;")
+       #read line by line
        for line in fcrtable.readlines():
+          #if the line has ;
           if line.find(";") != -1:
+             #then check if the line has CHARSET=
              if (line.find("CHARSET=") != -1):
+                 #if yes then capture the character set string using regex
                  charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;|]*",line)
+                 #if charset and also tablename is captured then
                  if (charset!=[] and tblname!=[]):
-                     if (tblcharset!={}):
-                        if "utf8" not in tblcharset.get(tblname[0].lower(),""):
-                           tblcharset[tblname[0].lower()]=charset[0]
-                     else:
-                        tblcharset[tblname[0].lower()]=charset[0]
+                     #store the tablename as a key and charset as value in tblcharset dict
+                     tblcharset[tblname[0].lower()]=charset[0]
+             #capture ENGINE=
              if (line.find("ENGINE=") != -1):
                  engine=re.findall("ENGINE=([a-zA-Z0-9]+)[ |;|]*",line)
 
              try:
+                #execute create table script
                 curcrtable.execute(createtable+line)
+                #commmit it
                 impconnection.commit()
              except (Exception,pymysql.Error) as error:
+                #capture error if foreign key constraint is incorrectl formed
                 if re.findall("Foreign key constraint is incorrectly formed",str(error))!=[]:
                    crtblfailed.append(createtable+line) 
+                #if table already exist skip
                 elif re.findall("already exists",str(error))!=[]:
                    pass
+                #if error other than the above then
                 else:
+                   #if the engine is captured then display the error along with what engine was used
                    if (engine!=[] and tblname!=[]):
                       logging.error(Red+'create_table: Error occured: '+str(error)+" ENGINE="+engine[0])
+                   #otherwise just display an error
                    else:
                       logging.error(Red+'create_table: Error occured: '+str(error))
+                #rollback it
                 impconnection.rollback()
                 pass
              createtable=""
+          #if the line doesnt contain ; then
           else:
+             #this is must be the first line , therefore capture CREATE TABLE command 
              if (line.find("CREATE TABLE") != -1):
+                 #get the tablename by using regex
                  tblname=re.findall("CREATE TABLE `(.*)` ",line)
-             if (line.find("CHARACTER") != -1):
-                 charset=re.findall("CHARACTER SET ([a-zA-Z0-9]+) COLLATE.*",line)
-                 if (charset!=[] and tblname!=[]):
-                     if (tblcharset!={}):
-                        if "utf8" not in tblcharset.get(tblname[0].lower(),""):
-                           tblcharset[tblname[0].lower()]=charset[0]
-                     else:
-                        tblcharset[tblname[0].lower()]=charset[0]
+             #if no previous create table command then
              if createtable=="":
+                #display message
                 logging.info("\033[1;33;40mExecuting...."+line[:-2])
+             #forming create table script and store into createtable variable
              createtable+=line
 
+       #close the cursor
        fcrtable.close()
+       #empty the variable
        createtable=""
+       #re-enable foreign key check
        curcrtable.execute("SET FOREIGN_KEY_CHECKS=1;")
     
     except (Exception,pymysql.Error) as error:
@@ -969,11 +985,13 @@ def usage():
     print("   -f, --force-export            Remove previous exported directory and its files")
     print("   -r, --remove-db               Remove database (drop and re-create)")
     print("   -i, --import                  Import Mode")
+    print("   -C, --complete-migration      Complete Migration: Export -> Import -> Compare database")
     print("   -s, --script                  Generate Scripts")
     print("   -d, --dbinfo  -t, --db-list=  Gather Database Info (all|list|db1,db2,dbN)")
     print("   -a, --all-info                Gather All Information From information_schema")
     print("   -c, --db-compare              Compare Database")
     print("   -o, --clone-variables         Clone Variables from a Source to a Target Database")
+    print("   -h, --help                    Display this help")
     print("   -l, --log=                    INFO|DEBUG|WARNING|ERROR|CRITICAL\n")
 
 def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
@@ -1029,6 +1047,8 @@ def import_data():
         impdatabase=g_dblist
 
     l_impalldb=[]
+
+    log_result(mainlogfilename)
 
     #if databases are separarted by comma
     if (len(impdatabase.split(","))>1):
@@ -1148,7 +1168,7 @@ def import_data():
             logging.info("Source database original character set and collation is : "+getcharset+" "+getcollation)
             logging.info("Target database original character set and collation is : "+gicharset+" "+gicollation)
             logging.info("Source and Target database must have the same character set and collation")
-            exit()
+            continue
     
     
         impsetvars=set_params()
@@ -1407,13 +1427,24 @@ def import_data():
               logging.error("\033[1;37;40mDatabase import connections are closed")
 
 def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdatabase,expca):
+    global tblcharset
+    if (tblcharset[tbldata].find("utf8") != -1):
+        charset="utf-8"
+        dbcharset="utf8"
+    elif (tblcharset[tbldata].find("latin") != -1):
+        charset="utf-8"
+        dbcharset="utf8"
+    else:
+        charset="utf-8"
+        dbcharset="utf8"
+
     try:
        stime=datetime.datetime.now()
        spconnection=pymysql.connect(user=expuser,
                         password=exppass,
                         host=expserver,
                         port=int(expport),
-                        charset=expcharset,
+                        charset=dbcharset,
                         ssl_ca=expca,
                         database=expdatabase)
 
@@ -1425,7 +1456,7 @@ def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdat
        spooldir=spcursor.fetchone()
        if (spooldir[1]!=""):
 
-          expquery="""select * INTO OUTFILE '{0}'
+          expquery="""select * INTO OUTFILE '{0} CHARACTER SET {6}'
    FIELDS TERMINATED BY '{2}' 
    OPTIONALLY ENCLOSED BY '{3}' ESCAPED BY '{4}'
    LINES TERMINATED BY '{5}'
@@ -1511,18 +1542,10 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
 
           rowdata=""
           for record in records:
-             #print("============="+str(type(record))+"===================")
              if (record==''):
                 rowdata=rowdata+quote+''+quote+sep1
              elif (isinstance(record, bytes)):
-                #rowdata=rowdata+"'"+record.decode().replace("\\","\\\\").replace("'","\\'")+"'"+'\t'
-                #rowdata=rowdata+"'"+record.decode()+sep1
-                #try:
                 rowdata=rowdata+quote+record.decode(charset).replace(esc,esc+esc).replace(quote,esc+quote)+quote+sep1
-                #except (Exception) as error:
-                #   if (str(error).find("'utf-8' codec can't decode")!=-1):
-                #      rowdata=rowdata+quote+record.decode("ISO-8859-1")+quote+sep1
-                #   pass
              elif (isinstance(record, float)):
                 rowdata=rowdata+quote+exp2normal(record)+quote+sep1
              elif (isinstance(record, int)):
@@ -1530,11 +1553,8 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
              elif (isinstance(record, type(None))):
                 rowdata=rowdata+str(record).replace("None",esc+"N")+sep1
              elif (isinstance(record, str)):
-                #rowdata=rowdata+quote+record.replace(esc,esc+esc).replace(quote,esc+quote)+quote+sep1
-                #record2=record.replace("\u00a0","").replace("\xa0","")
                 rowdata=rowdata+quote+record.replace(esc,esc+esc).replace(quote,esc+quote)+quote+sep1
              else:
-                #print("===="+str(record)+"=====")
                 rowdata=rowdata+quote+str(record).replace(esc,esc+esc).replace(quote,esc+quote)+quote+sep1
 
           f.write(rowdata[:-len(sep1)]+eol+crlf)
@@ -1545,7 +1565,6 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
              logging.info(mprocessid+" Written "+str(rowcount)+" rows to \033[1;34;40m"+expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz")
              if (f):
                 f.close()
-             #logging.info(expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz "+str(rawincount(expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz")))
              fileno+=1
              logging.info(mprocessid+" Writing data to \033[1;34;40m"+expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz")
              f=pgzip.open(expdatabase+"/"+tbldata+"."+str(fileno)+".csv.gz","wt", thread=0)
@@ -2254,6 +2273,8 @@ def compare_database():
        imppass=' ';
     imppass=decode_password(imppass)
 
+    log_result(mainlogfilename)
+
     #if list of database is specified then use the parameter rather than config file
     if g_dblist!=None:
         expdatabase=g_dblist
@@ -2385,6 +2406,8 @@ def compare_database():
                       sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
                       scursor=sconn.cursor()
                       srows=scursor.execute(query)
+                  else:
+                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Source DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
 
                try:
                   trows=tcursor.execute(query)
@@ -2396,14 +2419,18 @@ def compare_database():
                           gicharset="utf8mb4"
                       else:
                           gicharset="utf8"
-                      print(gicharset)
                       tconn = reconnect(impuser,imppass,impserver,impport,gicharset,impca,impdatabase)
                       tcursor=tconn.cursor()
                       trows=tcursor.execute(query)
+                  else:
+                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Source DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
    
-               if (trows!=srows):
-                  logging.info("\033[1;31;40mNumber of rows ("+str(srows)+") source database :"+expdatabase+"@"+expserver+", Table :"+tbl[0]+" is different than target database :"+impdatabase+"@"+impserver+" ("+str(trows)+")")
-                  l_mismatches[tbl[0]]="S"+str(srows)+"|T"+str(trows)
+               if (trows<srows):
+                  logging.info("\033[1;31;40mNumber of rows ("+str(srows)+") source database :"+expdatabase+"@"+expserver+", Table :"+tbl[0]+" is more than target database :"+impdatabase+"@"+impserver+" ("+str(trows)+")")
+                  l_mismatches[tbl[0]]="S"+str(srows)+">T"+str(trows)
+               elif (trows>srows):
+                  logging.info("\033[1;31;40mNumber of rows ("+str(srows)+") source database :"+expdatabase+"@"+expserver+", Table :"+tbl[0]+" is less than target database :"+impdatabase+"@"+impserver+" ("+str(trows)+")")
+                  l_mismatches[tbl[0]]="S"+str(srows)+"<T"+str(trows)
                   continue
    
                i=1
@@ -2530,7 +2557,7 @@ def get_params():
 
 #procedure to export data
 def export_data(**kwargs):
-    global exptables,config,configfile,curtblinfo,crtblfile,expmaxrowsperfile,expdatabase,dtnow,expconnection,gecharset,gecollation,resultlist,expoldvars,mainlogfilename,tblcharset,forcexp,g_dblist
+    global exptables,config,configfile,curtblinfo,crtblfile,expmaxrowsperfile,expdatabase,dtnow,expconnection,gecharset,gecollation,resultlist,expoldvars,tblcharset,forcexp,g_dblist
     #Read configuration from mysqlconfig.ini file
     logging.info("Read configuration from mysqlconfig.ini file")
 
@@ -2558,7 +2585,7 @@ def export_data(**kwargs):
 
     l_expalldb=retdblist["export"]
 
-    for l_dblist in l_expalldb:
+    for l_dblist in l_expalldb[:]:
         if (expexcludedb!=None and expexcludedb!=""):
            if (len(expexcludedb.split(","))>1):
               if l_dblist in expexcludedb.split(","):
@@ -2581,7 +2608,7 @@ def export_data(**kwargs):
 
     for expdatabase in l_expalldb:
         tblcharset={}
-        log_result(expdatabase+"/export_"+expdatabase+".log")
+        log_result(mainlogfilename)
 
         #Create directory to spool all export files
         if os.path.exists(expdatabase):
@@ -2605,6 +2632,7 @@ def export_data(**kwargs):
            logging.error("\033[1;31;40mError occured :"+str(logerr))
            sys.exit(2)
 
+        log_result(expdatabase+"/export_"+expdatabase+".log")
 
         gecharcollation=gather_database_charset(expserver,expport,expdatabase,"SOURCE")
         gecharsetorig=gecharcollation[0]
@@ -2713,28 +2741,29 @@ def export_data(**kwargs):
     
            if (crtblfile):
               crtblfile.close()
-    
+          
+           #if this only to generate the script then continue to the next database or return
            if mode=="script":
               if(curtblinfo): curtblinfo.close()
               continue
     
            global totalproc
 
-           #manager = mproc.Manager()
-    
            sharedvar=mproc.Value('i',0)
            resultlist=mproc.Manager().list()
            sharedvar.value=0
 
-           
-    
+   
+           #run multiprocess to spool out the data
            with mproc.Pool(processes=expparallel) as exportpool:
+              #spool data out on a client machine
               if (kwargs.get('spool',None)=='toclient' or kwargs.get('spool',None)==None):
                  multiple_results = [exportpool.apply_async(spool_data_unbuffered, args=(tbldata,expuser,exppass,expserver,expport,gecharset,expdatabase,exprowchunk,expca),callback=cb) for tbldata in listoftables]
                  exportpool.close()
                  exportpool.join()
                  [res.get() for res in multiple_results]
     
+              #spool data out on a server
               elif (kwargs.get('spool',None)=='toserver'):
                  multiple_results = [exportpool.apply_async(spool_table_fast, args=(tbldata,expuser,exppass,expserver,expport,gecharset,expdatabase,expca),callback=cb) for tbldata in listoftables]
                  exportpool.close()
@@ -2873,7 +2902,6 @@ def main():
 
     try: 
        configfile='mysqlconfig.ini'
-       mainlogfilename='expimpmysql.log'
        log_result(mainlogfilename)
 
        dtnow=datetime.datetime.now()
