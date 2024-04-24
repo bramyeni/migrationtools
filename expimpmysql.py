@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 613 2024-04-23 16:08:25Z bpahlawa $
+# $Id: expimpmysql.py 614 2024-04-24 06:02:06Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-24 00:08:25 +0800 (Wed, 24 Apr 2024) $
-# $Revision: 613 $
+# $Date: 2024-04-24 14:02:06 +0800 (Wed, 24 Apr 2024) $
+# $Revision: 614 $
 
 import re
 from string import *
@@ -872,7 +872,7 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
        l_strcol="("
        l_setcmd="SET "
 
-       l_allcols=None
+       l_allcols=""
        l_nocontent=True
 
 
@@ -883,8 +883,10 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
 
        for l_dtype in g_tblbinlob[tablename]:
            if re.findall(".*(lob|binary).*",g_tblbinlob[tablename][l_dtype])!=[]:
-               l_setcmd+=l_dtype+" = UNHEX(@"+l_dtype+"), "
-               l_allcols=l_allcols.replace(l_dtype,"@"+l_dtype)
+               print(g_tblbinlob[tablename][l_dtype])
+               print(l_dtype)
+               l_setcmd+="`"+l_dtype+"` = UNHEX(@"+l_dtype+"), "
+               l_allcols=l_allcols.replace("`"+l_dtype+"`","@"+l_dtype)
        if l_setcmd=="SET ":
           l_setcmd=""
        else:
@@ -1030,12 +1032,13 @@ def verify_data(tablefile,impuser,imppass,impserver,impport,impcharset,impdataba
        logging.info(mprocessid+" Counting no of rows from file(s) \033[1;34;40m"+dirname+"/"+tablename+".*csv"+"\033[1;37;40m")
        for thedumpfile in glob.glob(dirname+"/"+tablename+".*.csv.gz"):
            rowsfromfile+=rawincountgz(thedumpfile)
+
        for thedumpfile in glob.glob(dirname+"/"+tablename+".csv.gz"):
            rowsfromfile+=rawincount(thedumpfile)
 
        if (rowsfromfile<0):
           rowsfromfile=0
-       elif rowsfromfile>0:
+       if (rowsfromfile>0):
           rowsfromfile-=1
        if rowsfromfile==rowsfromtable:
           logging.info(mprocessid+" Table \033[1;34;40m"+tablename+"\033[0;37;40m no of rows: \033[1;36;40m"+str(rowsfromfile)+" does match!\033[1;36;40m")
@@ -1070,6 +1073,7 @@ def usage():
     print("   -d, --dbinfo  -t, --db-list=  Gather Database Info (all|list|db1,db2,dbN)")
     print("   -a, --all-info                Gather All Information From information_schema")
     print("   -c, --db-compare              Compare Database")
+    print("   -p, --compare-filerowcount           Compare File and database rowcount only")
     print("   -o, --clone-variables         Clone Variables from a Source to a Target Database")
     print("   -h, --help                    Display this help")
     print("   -l, --log=                    INFO|DEBUG|WARNING|ERROR|CRITICAL\n")
@@ -1171,22 +1175,23 @@ def import_data(**kwargs):
             thesqlfile=glob.glob("*/"+crdbfilename)
             for filelst in thesqlfile:
                l_dblist=os.path.dirname(filelst)
-               if (impexcludedb!=None and impexcludedb!=""):
-                  if (len(impexcludedb.split(","))>1):
-                      if l_dblist not in impexcludedb.split(","):
-                         logging.info("Importing database "+Yellow+l_dblist+Green)
-                         l_impalldb.append(l_dblist)
-                      else:
-                         logging.info("Excluding database "+Cyan+l_dblist+Green)
+               if glob.glob(l_dblist+"/*.gz")!=[]:
+                  if (impexcludedb!=None and impexcludedb!=""):
+                     if (len(impexcludedb.split(","))>1):
+                         if l_dblist not in impexcludedb.split(","):
+                            logging.info("Importing database "+Yellow+l_dblist+Green)
+                            l_impalldb.append(l_dblist)
+                         else:
+                            logging.info("Excluding database "+Cyan+l_dblist+Green)
+                     else:
+                         if (l_dblist!=impexcludedb):
+                            logging.info("Importing database "+Yellow+l_dblist+Green)
+                            l_impalldb.append(l_dblist)
+                         else:
+                            logging.info("Excluding database "+Cyan+impexcludedb+Green)
                   else:
-                      if (l_dblist!=impexcludedb):
-                         logging.info("Importing database "+Yellow+l_dblist+Green)
-                         l_impalldb.append(l_dblist)
-                      else:
-                         logging.info("Excluding database "+Cyan+impexcludedb+Green)
-               else:
-                  logging.info("Importing database "+Yellow+l_dblist+Green)
-                  l_impalldb.append(l_dblist)
+                     logging.info("Importing database "+Yellow+l_dblist+Green)
+                     l_impalldb.append(l_dblist)
         else:
            logging.info("Exported files are not complete, consider re-exporting..")
     #the same logic as the above but for single database
@@ -1302,178 +1307,253 @@ def import_data(**kwargs):
                   else:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
     
-           create_table()
-    
-           #create_table_keys()
-    
            listofdata=[]
-    
+
            curimptbl.execute(sqllisttables)
            rows = curimptbl.fetchall()
 
-           for row in rows:
-              if imptables=="all":
-                  if os.path.isfile(impdatabase+"/"+row[0]+".csv"):
-                     slicefiletot=0
-                     logging.info("Comparing total rows within file \033[1;34;40m"+impdatabase+"/"+row[0]+".csv"+"\033[1;32;40m and total rows within sliced files are in progress\033[1;37;40m")
-    
-                     origfiletot=rawincountreg(impdatabase+"/"+row[0]+".csv") 
-                     ctlines = os.popen("zcat "+impdatabase+"/"+row[0]+".*.csv.gz 2>/dev/null | wc -l")
-                     slicefiletot = int(ctlines.read())
-    
-                     if (origfiletot!=slicefiletot):
-                         logging.info("Total rows within sliced files "+impdatabase+"/"+row[0]+".*.csv.gz"+" : "+str(slicefiletot))
-                         logging.info("Total rows within regular file "+impdatabase+"/"+row[0]+".csv"+" : "+str(origfiletot))
-                         slice_file(impdatabase,row[0])
-                     else:
-                         logging.info("Total no of rows is the same")
-    
-                     if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
-                        logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                        curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                        curimptbl.execute("truncate table `"+row[0]+"`;")
-                        curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                        curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-                     else:
-                        with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
-                            exprowchunk = read_config('export','rowchunk')
-                            if (flagfile.readlines()[0]==str(exprowchunk)):
-                               logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                            else:
-                               logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
-                               for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
-                                   if os.path.isfile(file2del): os.remove(file2del)
-                               logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                               curimptbl.execute("truncate table `"+row[0]+"`;")
-                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                               curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-    
-                     listofdata.append(row[0])
-                     for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
-                         listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
-    
-                  elif os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz"):
-                     if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
-                        logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                        curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                        curimptbl.execute("truncate table `"+row[0]+"`;")
-                        curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                        curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-                     else:
-                        with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
-                            exprowchunk = read_config('export','rowchunk')
-                            if (flagfile.readlines()[0]==str(exprowchunk)):
-                               logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                            else:
-                               logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
-                               for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
-                                   if os.path.isfile(file2del): os.remove(file2del)
-                               logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                               curimptbl.execute("truncate table `"+row[0]+"`;")
-                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                               curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-    
-    
-                     listofdata.append(row[0])
-                     for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
-                         listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
-    
-                  else:
-                     logging.info("File "+impdatabase+"/"+row[0]+".csv.gz or "+impdatabase+"/"+row[0]+".csv doesnt exist")
-              else:
-                  selectedtbls=imptables.split(",")
-                  for selectedtbl in selectedtbls:
-                      if selectedtbl.lower()!=row[0]:
-                         continue
-                      else:
-                         if os.path.isfile(impdatabase+"/"+row[0]+".csv"):
-                            slicefiletot=0
-                            logging.info("Comparing total rows within file \033[1;34;40m"+impdatabase+"/"+row[0]+".csv"+"\033[1;32;40m and total rows within sliced files are in progress\033[1;37;40m")
-                            origfiletot=rawincountreg(impdatabase+"/"+row[0]+".csv")
-                            ctlines = os.popen("zcat "+impdatabase+"/"+row[0]+".*.csv.gz 2>/dev/null | wc -l")
-                            slicefiletot = int(ctlines.read())
-       
-                            if (origfiletot!=slicefiletot):
-                               logging.info("Total rows within sliced files "+impdatabase+"/"+row[0]+".*.csv.gz"+" : "+str(slicefiletot))
-                               logging.info("Total rows within regular file "+impdatabase+"/"+row[0]+".csv"+" : "+str(origfiletot))
-                               slice_file(impdatabase,row[0])
-                            else:
-                               logging.info("Total no of rows is the same")
-    
-                            if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
-                               logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                               curimptbl.execute("truncate table `"+row[0]+"`;")
-                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                               curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-                            else:
-                               with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
-                                  exprowchunk = read_config('export','rowchunk')
-                                  if (flagfile.readlines()[0]==str(exprowchunk)):
-                                      logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                                  else:
-                                      logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
-                                      for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
-                                          if os.path.isfile(file2del): os.remove(file2del)
-                                      logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                                      curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                                      curimptbl.execute("truncate table `"+row[0]+"`;")
-                                      curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                                      curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-    
-                            listofdata.append(row[0])
-                            for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
-                                listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
-    
-       
-                         elif os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz"):
-                            if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
-                               logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                               curimptbl.execute("truncate table `"+row[0]+"`;")
-                               curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                               curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-                            else:
-                               with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
-                                  exprowchunk = read_config('export','rowchunk')
-                                  if (flagfile.readlines()[0]==str(exprowchunk)):
-                                     logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                                  else:
-                                     logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
-                                     for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
-                                        if os.path.isfile(file2del): os.remove(file2del)
-                                     logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
-                                     curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
-                                     curimptbl.execute("truncate table `"+row[0]+"`;")
-                                     curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                                     curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
-    
-                            listofdata.append(row[0])
-                            for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
-                                listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
-    
-                         else:
-                            logging.info("File "+impdatabase+"/"+row[0]+".csv.gz or "+impdatabase+"/"+row[0]+".csv doesnt exist")
-    
-           impconnection.commit()
-           impconnection.close()
-    
            sharedvar=mproc.Value('i',0)
            resultlist=mproc.Manager().list()
            sharedvar.value=0
 
-           if listofdata[0] not in g_tblbinlob.keys():
-               g_tblbinlob =  {k.lower(): v for k, v in g_tblbinlob.items()}
-    
-           with mproc.Pool(processes=impparallel) as importpool:
-              multiple_results = [importpool.apply_async(insert_data_from_file, args=(tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,impdatabase,impca),callback=cb) for tbldata in listofdata]
-              importpool.close()
-              importpool.join()
-              [res.get() for res in multiple_results]
+
+           if (kwargs.get('frowcountonly',False)==False):
+              #create_table_keys()
+       
+              create_table()
+   
+              for row in rows:
+                 if imptables=="all":
+                     #check whether regular csv file available
+                     if os.path.isfile(impdatabase+"/"+row[0]+".csv"):
+                        slicefiletot=0
+                        logging.info("Comparing total rows within file \033[1;34;40m"+impdatabase+"/"+row[0]+".csv"+"\033[1;32;40m and total rows within sliced files are in progress\033[1;37;40m")
+       
+                        #count regular csv file lines
+                        origfiletot=rawincountreg(impdatabase+"/"+row[0]+".csv") 
+                        #count gzipped csv file lines
+                        ctlines = os.popen("zcat "+impdatabase+"/"+row[0]+".*.csv.gz 2>/dev/null | wc -l")
+                        slicefiletot = int(ctlines.read())
+       
+                        #compareing regular and gzipped file's lines
+                        if (origfiletot!=slicefiletot):
+                            logging.info("Total rows within sliced files "+impdatabase+"/"+row[0]+".*.csv.gz"+" : "+str(slicefiletot))
+                            logging.info("Total rows within regular file "+impdatabase+"/"+row[0]+".csv"+" : "+str(origfiletot))
+                            #slicing file based on import rowchunk config
+                            slice_file(impdatabase,row[0])
+                        else:
+                            logging.info("Total no of lines between sliced gz file and regular file is the same")
+       
+                        #check if the flag file exists
+                        if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
+                           #if not then truncate tables
+                           logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                           curimptbl.execute("truncate table `"+row[0]+"`;")
+                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                           curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                        else:
+                           #else then read the rowchunk and resume the insert
+                           with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
+                               exprowchunk = read_config('export','rowchunk')
+                               if (flagfile.readlines()[0]==str(exprowchunk)):
+                                  logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                               else:
+                                  #if cant resume then delete the flag file
+                                  logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
+                                  for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
+                                      if os.path.isfile(file2del): os.remove(file2del)
+                                  #Truncate the table then initiate insert data from scratch
+                                  logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                                  curimptbl.execute("truncate table `"+row[0]+"`;")
+                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                                  curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+       
+                        #add this table into listofdata list
+                        listofdata.append(row[0])
+                        #add slicetbl into listofdata list as well
+                        for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                            listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+       
+                     #check whether gzipped csv file is available
+                     elif os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz"):
+                        #check if the flag file exists
+                        if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
+                           logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                           curimptbl.execute("truncate table `"+row[0]+"`;")
+                           curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                           curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                        #else get the rowchunk and resume
+                        else:
+                           with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
+                               exprowchunk = read_config('export','rowchunk')
+                               if (flagfile.readlines()[0]==str(exprowchunk)):
+                                  logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                               else:
+                                  logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
+                                  for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
+                                      if os.path.isfile(file2del): os.remove(file2del)
+                                  logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                                  curimptbl.execute("truncate table `"+row[0]+"`;")
+                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                                  curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+       
+                        #add table into listofdata list 
+                        listofdata.append(row[0])
+                        for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                            listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+       
+                     else:
+                        logging.info("File "+impdatabase+"/"+row[0]+".csv.gz or "+impdatabase+"/"+row[0]+".csv doesnt exist")
+                 else:
+                     #list of tables separated by comma
+                     selectedtbls=imptables.split(",")
+                     for selectedtbl in selectedtbls:
+                         if selectedtbl.lower()!=row[0]:
+                            continue
+                         else:
+                            #check whether csv regular file exists
+                            if os.path.isfile(impdatabase+"/"+row[0]+".csv"):
+                               slicefiletot=0
+                               logging.info("Comparing total rows within file \033[1;34;40m"+impdatabase+"/"+row[0]+".csv"+"\033[1;32;40m and total rows within sliced files are in progress\033[1;37;40m")
+                               origfiletot=rawincountreg(impdatabase+"/"+row[0]+".csv")
+                               ctlines = os.popen("zcat "+impdatabase+"/"+row[0]+".*.csv.gz 2>/dev/null | wc -l")
+                               slicefiletot = int(ctlines.read())
           
+                               #if not the same between regular and gzipped file then slice it based on improwchunk config 
+                               if (origfiletot!=slicefiletot):
+                                  logging.info("Total rows within sliced files "+impdatabase+"/"+row[0]+".*.csv.gz"+" : "+str(slicefiletot))
+                                  logging.info("Total rows within regular file "+impdatabase+"/"+row[0]+".csv"+" : "+str(origfiletot))
+                                  slice_file(impdatabase,row[0])
+                               else:
+                                  logging.info("Total no of lines between sliced gz file and regular file is the same")
+       
+                               #check flag file , if doesnt exist then truncate tables
+                               if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
+                                  logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                                  curimptbl.execute("truncate table `"+row[0]+"`;")
+                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                                  curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                               else:
+                                  #open a flagfile and compare content with exprowchunk
+                                  with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
+                                     exprowchunk = read_config('export','rowchunk')
+                                     #if the same then resume inserts
+                                     if (flagfile.readlines()[0]==str(exprowchunk)):
+                                         logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                     #else start from scratch
+                                     else:
+                                         logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
+                                         for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
+                                             if os.path.isfile(file2del): os.remove(file2del)
+                                         logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                         curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                                         curimptbl.execute("truncate table `"+row[0]+"`;")
+                                         curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                                         curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+
+                               #add table into listofdata list 
+                               listofdata.append(row[0])
+                               for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                                   listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+       
+          
+                            #check if the gzipped csv file exists
+                            elif os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz"):
+                               #same routine as above
+                               if not os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag"):
+                                  logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                                  curimptbl.execute("truncate table `"+row[0]+"`;")
+                                  curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                                  curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                               else:
+                                  with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
+                                     exprowchunk = read_config('export','rowchunk')
+                                     if (flagfile.readlines()[0]==str(exprowchunk)):
+                                        logging.info("Resuming insert into table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                     else:
+                                        logging.info("Unable to resume as the chunk size is different than the previous one, all flag files related to table  \033[1;34;40m"+row[0]+"\033[1;37;40m will be removed!")
+                                        for file2del in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz-tbl.flag"):
+                                           if os.path.isfile(file2del): os.remove(file2del)
+                                        logging.info("Truncating table \033[1;34;40m"+row[0]+"\033[1;37;40m in progress")
+                                        curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
+                                        curimptbl.execute("truncate table `"+row[0]+"`;")
+                                        curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
+                                        curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+       
+                               listofdata.append(row[0])
+                               for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                                   listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+       
+                            else:
+                               logging.info("File "+impdatabase+"/"+row[0]+".csv.gz or "+impdatabase+"/"+row[0]+".csv doesnt exist")
+       
+       
+        
+   
+              if g_tblbinlob=={}:
+                  logging.info(Red+"Unable to retrieve information from database "+impdatabase+Coloff)
+                  continue
+   
+              if listofdata[0] not in g_tblbinlob.keys():
+                  g_tblbinlob =  {k.lower(): v for k, v in g_tblbinlob.items()}
+   
+              impconnection.commit()
+              impconnection.close()
     
+
+              with mproc.Pool(processes=impparallel) as importpool:
+                 multiple_results = [importpool.apply_async(insert_data_from_file, args=(tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,impdatabase,impca),callback=cb) for tbldata in listofdata]
+                 importpool.close()
+                 importpool.join()
+                 [res.get() for res in multiple_results]
+
+           else:
+
+              for row in rows:
+                 if imptables=="all":
+                     if os.path.isfile(impdatabase+"/"+row[0]+".csv"):
+                        #add this table into listofdata list
+                        listofdata.append(row[0])
+                        #add slicetbl into listofdata list as well
+                        for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                            listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+
+                     #check whether gzipped csv file is available
+                     elif os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz"):
+                        #add table into listofdata list 
+                        listofdata.append(row[0])
+                        for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                            listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+                     else:
+                        logging.info("File "+impdatabase+"/"+row[0]+".csv.gz or "+impdatabase+"/"+row[0]+".csv doesnt exist")
+                 else:
+                     selectedtbls=imptables.split(",")
+                     for selectedtbl in selectedtbls:
+                         if selectedtbl.lower()!=row[0]:
+                            continue
+                         else:
+                            if os.path.isfile(impdatabase+"/"+row[0]+".csv"):
+                               #add table into listofdata list 
+                               listofdata.append(row[0])
+                               for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                                   listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+
+                            #check if the gzipped csv file exists
+                            elif os.path.isfile(impdatabase+"/"+row[0]+".1.csv.gz"):
+                               listofdata.append(row[0])
+                               for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
+                                   listofdata.append(slicetbl.split("/")[1].replace(".csv.gz",""))
+
+                            else:
+                               logging.info("File "+impdatabase+"/"+row[0]+".csv.gz or "+impdatabase+"/"+row[0]+".csv doesnt exist")
+
+           #start rowcounting check
            with mproc.Pool(processes=impparallel) as importpool:
               multiple_results = [importpool.apply_async(verify_data, (tbldata,impuser,imppass,impserver,impport,gicharset,impdatabase,improwchunk,impdatabase,impca)) for tbldata in listofdata]
               importpool.close()
@@ -1507,6 +1587,8 @@ def import_data(**kwargs):
     
         except (Exception,pymysql.Error) as error:
            logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+
+
         finally:
            if (impconnection):
               curimptbl.close()
@@ -1623,7 +1705,7 @@ def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,e
 
        fields=""
        for col in spcursor.description:
-           fields+=col[0]+","
+           fields+="`"+col[0]+"`,"
 
        f.write(fields[:-1]+eol+crlf)
 
@@ -2488,15 +2570,23 @@ def compare_database(**kwargs):
            l_mismatches={}
 
            for tbl in alltbls:
+               q_pk="show keys from `"+tbl[0]+"` where key_name='PRIMARY'"
+               srows=scursor.execute(q_pk)
+               l_orderby=""
+               for i in range(1,srows+1):
+                   l_orderby+=str(i)+","
+
+               if l_orderby=="":
+                  l_orderby="1,"
 
                logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
-               query="select * from `"+tbl[0]+"` order by 1"
+               query="select * from `"+tbl[0]+"` order by "+l_orderby[:-1]
                try:
                   srows=scursor.execute(query)
                   fields=""
                   for col in scursor.description:
-                      fields+=col[0]+","
-                  query="select "+fields[:-1]+" from `"+tbl[0]+"` order by 1" 
+                      fields+="`"+col[0]+"`,"
+                  query="select "+fields[:-1]+" from `"+tbl[0]+"` order by "+l_orderby[:-1]
 
                except (Exception,pymysql.Error) as error:
                   if re.findall("codec|Connection reset by peer",str(error))!=[]:
@@ -2511,8 +2601,8 @@ def compare_database(**kwargs):
                       srows=scursor.execute(query)
                       fields=""
                       for col in scursor.description:
-                          fields+=col[0]+","
-                      query="select "+fields[:-1]+" from `"+tbl[0]+"` order by 1" 
+                          fields+="`"+col[0]+"`,"
+                      query="select "+fields[:-1]+" from `"+tbl[0]+"` order by "+l_orderby[:-1]
                   else:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Source DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
 
@@ -2535,6 +2625,7 @@ def compare_database(**kwargs):
                if (trows<srows):
                   logging.info("\033[1;31;40mNumber of rows ("+str(srows)+") source database :"+expdatabase+"@"+expserver+", Table :"+tbl[0]+" is more than target database :"+impdatabase+"@"+impserver+" ("+str(trows)+")")
                   l_mismatches[tbl[0]]="S"+str(srows)+">T"+str(trows)
+                  continue
                elif (trows>srows):
                   logging.info("\033[1;31;40mNumber of rows ("+str(srows)+") source database :"+expdatabase+"@"+expserver+", Table :"+tbl[0]+" is less than target database :"+impdatabase+"@"+impserver+" ("+str(trows)+")")
                   l_mismatches[tbl[0]]="S"+str(srows)+"<T"+str(trows)
@@ -2946,7 +3037,7 @@ def main():
     #initiate signal handler, it will capture if user press ctrl+c key, the program will terminate
     handler = signal.signal(signal.SIGINT, trap_signal)
     try:
-       opts, args=getopt.getopt(sys.argv[1:], "hl:eEisvdt:acofrC", ["help","log=","export-to-client","export-to-server","import","script","dbinfo","db-list=","all-info","db-compare","clone-variables","force-export","remove-db","complete-migration"])
+       opts, args=getopt.getopt(sys.argv[1:], "hl:eEisvdt:acofrCp", ["help","log=","export-to-client","export-to-server","import","script","dbinfo","db-list=","all-info","db-compare","clone-variables","force-export","remove-db","complete-migration","compare-filerowcount"])
     except (Exception,getopt.GetoptError) as error:
        logging.error("\n\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        usage()
@@ -3001,7 +3092,7 @@ def main():
             if (mode=="dbinfo"):
                mode = "dblistinfo"
                dblist = a
-            elif (mode in ["exportclient","exportserver","import","dbcompare","completemigration"]):
+            elif (mode in ["exportclient","exportserver","import","dbcompare","completemigration","filerowcount"]):
                g_dblist = a
             else:
                mode = "dblist"
@@ -3011,6 +3102,8 @@ def main():
             mode = "completemigration"
         elif o in ("-o","--clone-variables"):
             mode = "clonevar"
+        elif o in ("-p","--compare-filerowcount"):
+            mode = "filerowcount"
         elif o in ("-c","--db-compare"):
             mode = "dbcompare"
             l_mig.append(mode)
@@ -3058,7 +3151,6 @@ def main():
              logging.info("Comparing schema/database......")
              compare_database()
        else:
-   
           if mode=="exportserver":
              cfgmode='export'
              logging.info("Exporting data to a server......")
@@ -3078,12 +3170,16 @@ def main():
              logging.info("Gathering All information belongs to this schema/database......")
              get_all_info()
           elif mode=="completemigration":
+             #this will run complete migration per database
              logging.info("Complete Migration Export => Import => Compare schema/database......")
              cfgmode='export'
              export_data(spool='toclient',insequence="sequence")
           elif mode=="clonevar":
              logging.info("Cloning variables from source to target database......")
              get_all_variables()
+          elif mode=="filerowcount": 
+             cfgmode="import"
+             import_data(frowcountonly=True)
           else:
              sys.exit()
 
