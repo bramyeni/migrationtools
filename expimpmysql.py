@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 616 2024-04-25 13:52:15Z bpahlawa $
+# $Id: expimpmysql.py 617 2024-04-25 15:13:58Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-25 21:52:15 +0800 (Thu, 25 Apr 2024) $
-# $Revision: 616 $
+# $Date: 2024-04-25 23:13:58 +0800 (Thu, 25 Apr 2024) $
+# $Revision: 617 $
 
 import re
 from string import *
@@ -1225,44 +1225,42 @@ def import_data(**kwargs):
            logging.info("Exported files are not complete, consider re-exporting..")
 
 
-    if imprenamedb!=None or imprenamedb!="":
+    if imprenamedb!=None and imprenamedb!="":
         if (len(imprenamedb.split(","))>1):
-            for l_ordb in imprenamedb.split(","):
-               l_mapdb=l_ordb.split(":")
-               l_curdb=l_mapdb[0]
-               l_newdb=l_mapdb[1]
-               if l_curdb in l_impalldb[:]:
-                  try:
-                     if not os.path.islink(l_newdb): 
-                        os.symlink(l_curdb,l_newdb)
-                     if l_newdb not in l_impalldb[:]:
-                        l_impalldb.append(l_newdb)
-                     g_renamedb[l_newdb]=l_curdb
-                     l_impalldb.remove(l_curdb)
-                  except (Exception) as error:
-                     logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-                     logging.error("Unable to proceed renaming database "+l_curdb+" to "+l_newdb+" therefore Excluding database "+l_curdb)
-                     l_impalldb.remove(l_curdb)
-                     pass
-                  
-
+           for l_ordb in imprenamedb.split(","):
+              l_mapdb=l_ordb.split(":")
+              l_curdb=l_mapdb[0]
+              l_newdb=l_mapdb[1]
+              if l_curdb in l_impalldb[:]:
+                 try:
+                    if not os.path.islink(l_newdb): 
+                       os.symlink(l_curdb,l_newdb)
+                    if l_newdb not in l_impalldb[:]:
+                       l_impalldb.append(l_newdb)
+                    g_renamedb[l_newdb]=l_curdb
+                    l_impalldb.remove(l_curdb)
+                 except (Exception) as error:
+                    logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+                    logging.error("Unable to proceed renaming database "+l_curdb+" to "+l_newdb+" therefore Excluding database "+l_curdb)
+                    l_impalldb.remove(l_curdb)
+                    pass
         else:
-            l_mapdb=imprenamedb.split(":")
-            l_curdb=l_mapdb[0]
-            l_newdb=l_mapdb[1]
-            if l_curdb in l_impalldb:
-               try:
-                  if not os.path.islink(l_newdb): 
-                     os.symlink(l_curdb,l_newdb)
-                  if l_newdb not in l_impalldb[:]:
-                     l_impalldb.append(l_newdb)
-                  g_renamedb[l_newdb]=l_curdb
-                  l_impalldb.remove(l_curdb)
-               except (Exception) as error:
-                  logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
-                  logging.error("Unable to proceed renaming database "+l_curdb+" to "+l_newdb+" therefore Excluding database "+l_curdb)
-                  l_impalldb.remove(l_curdb)
-                  pass
+           l_mapdb=imprenamedb.split(":")
+           l_curdb=l_mapdb[0]
+           l_newdb=l_mapdb[1]
+           if l_curdb in l_impalldb:
+              try:
+                 if not os.path.islink(l_newdb): 
+                    os.symlink(l_curdb,l_newdb)
+                 if l_newdb not in l_impalldb[:]:
+                    l_impalldb.append(l_newdb)
+                 g_renamedb[l_newdb]=l_curdb
+                 l_impalldb.remove(l_curdb)
+              except (Exception) as error:
+                 logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+                 logging.error("Unable to proceed renaming database "+l_curdb+" to "+l_newdb+" therefore Excluding database "+l_curdb)
+                 l_impalldb.remove(l_curdb)
+                 pass
 
     for impdatabase in l_impalldb: 
 
