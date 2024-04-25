@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 615 2024-04-25 08:40:52Z bpahlawa $
+# $Id: expimpmysql.py 616 2024-04-25 13:52:15Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-25 16:40:52 +0800 (Thu, 25 Apr 2024) $
-# $Revision: 615 $
+# $Date: 2024-04-25 21:52:15 +0800 (Thu, 25 Apr 2024) $
+# $Revision: 616 $
 
 import re
 from string import *
@@ -1224,6 +1224,46 @@ def import_data(**kwargs):
         else:
            logging.info("Exported files are not complete, consider re-exporting..")
 
+
+    if imprenamedb!=None or imprenamedb!="":
+        if (len(imprenamedb.split(","))>1):
+            for l_ordb in imprenamedb.split(","):
+               l_mapdb=l_ordb.split(":")
+               l_curdb=l_mapdb[0]
+               l_newdb=l_mapdb[1]
+               if l_curdb in l_impalldb[:]:
+                  try:
+                     if not os.path.islink(l_newdb): 
+                        os.symlink(l_curdb,l_newdb)
+                     if l_newdb not in l_impalldb[:]:
+                        l_impalldb.append(l_newdb)
+                     g_renamedb[l_newdb]=l_curdb
+                     l_impalldb.remove(l_curdb)
+                  except (Exception) as error:
+                     logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+                     logging.error("Unable to proceed renaming database "+l_curdb+" to "+l_newdb+" therefore Excluding database "+l_curdb)
+                     l_impalldb.remove(l_curdb)
+                     pass
+                  
+
+        else:
+            l_mapdb=imprenamedb.split(":")
+            l_curdb=l_mapdb[0]
+            l_newdb=l_mapdb[1]
+            if l_curdb in l_impalldb:
+               try:
+                  if not os.path.islink(l_newdb): 
+                     os.symlink(l_curdb,l_newdb)
+                  if l_newdb not in l_impalldb[:]:
+                     l_impalldb.append(l_newdb)
+                  g_renamedb[l_newdb]=l_curdb
+                  l_impalldb.remove(l_curdb)
+               except (Exception) as error:
+                  logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+                  logging.error("Unable to proceed renaming database "+l_curdb+" to "+l_newdb+" therefore Excluding database "+l_curdb)
+                  l_impalldb.remove(l_curdb)
+                  pass
+
     for impdatabase in l_impalldb: 
 
         log_result(impdatabase+"/import_"+impdatabase+".log")
@@ -1503,8 +1543,11 @@ def import_data(**kwargs):
                   logging.info(Red+"Unable to retrieve information from database "+impdatabase+Coloff)
                   continue
    
-              if listofdata[0] not in g_tblbinlob.keys():
-                  g_tblbinlob =  {k.lower(): v for k, v in g_tblbinlob.items()}
+              if listofdata!=[]:
+                 if listofdata[0] not in g_tblbinlob.keys():
+                    g_tblbinlob =  {k.lower(): v for k, v in g_tblbinlob.items()}
+              else:
+                 logging.info(Red+"Unable to find any tables, check config file!! "+impdatabase+Coloff)
    
               impconnection.commit()
               impconnection.close()
@@ -1934,8 +1977,9 @@ def gather_database_info(auser,apass,aserver,aport,gecharset,aca,thedir,thedb):
         pass 
 
 def create_database(databasename,auser,apass,aserver,aport,gecharset,aca):
-    global configfile,cfgmode
+    global configfile,cfgmode,g_renamedb
     checkpass=apass
+    l_createdb=None
 
     while test_connection(auser,checkpass,aserver,aport,'mysql',aca)==1:
         checkpass=getpass.getpass('Enter Password for '+auser+' :').replace('\b','')
@@ -1959,7 +2003,13 @@ def create_database(databasename,auser,apass,aserver,aport,gecharset,aca):
         if (acursor.rowcount==0):
            logging.info("Creating database "+Blue+databasename)
            with open(databasename+"/"+crdbfilename, 'rt') as dbscript:
-               acursor.execute(dbscript.readline())
+               l_createdb=dbscript.readline()
+           if g_renamedb!={}:
+              if g_renamedb[databasename]!="":
+                  l_createdb=l_createdb.replace(g_renamedb[databasename],databasename)
+
+           print(l_createdb)
+           acursor.execute(l_createdb)
         else:
            if g_removedb==True:
                try:
@@ -2397,18 +2447,19 @@ def reconnect(ruser,rpass,rserver,rport,rcharset,rca,rdatabase):
 def dblist_expimp(l_impalldb,l_expalldb):
     l_cmpalldb=[]
     impexcludedb = read_config('import','excludedb')
-    for l_dblist in l_impalldb:
-        if (l_dblist in l_expalldb):
+    for l_dblist in l_expalldb or l_dblist.lower() in list(map(str.lower,l_expalldb)):
+        if l_dblist in l_impalldb or l_dblist.lower() in list(map(str.lower,l_impalldb)):
            if (impexcludedb!=None and impexcludedb!=""):
               if (len(impexcludedb.split(","))>1):
-                 if l_dblist not in impexcludedb.split(","):
+                 l_impexcludedb=impexcludedb.split(",")
+                 if l_dblist not in l_impexcludedb or l_dblist.lower() not in list(map(str.lower,l_impexcludedb)):
                     logging.info("Comparing Source and Target Database "+Yellow+l_dblist+Green)
                     l_cmpalldb.append(l_dblist)
                  else:
                     logging.info("Excluding Database "+Cyan+l_dblist+Green)
 
               else:
-                 if (impexcludedb!=l_dblist):
+                 if (impexcludedb!=l_dblist or impexcludedb!=l_dblist.lower()):
                     l_cmpalldb.append(l_dblist)
            else:
               logging.info("Comparing Source and Target Database "+Yellow+l_dblist)
@@ -2425,10 +2476,10 @@ def dblist_expimp(l_impalldb,l_expalldb):
 
 def form_orderby(tablename,thecursor):
     try:
-       l_query="show keys from "+tablename+" where key_name='PRIMARY'"
+       l_query="show keys from `"+tablename+"` where key_name='PRIMARY'"
        l_rows=thecursor.execute(l_query)
        if l_rows==0:
-          l_query="show keys from "+tablename+" where key_name like '%unique%'"
+          l_query="show keys from `"+tablename+"` where key_name like '%unique%'"
           l_rows=thecursor.execute(l_query)
    
        if l_rows==0:
@@ -2466,6 +2517,7 @@ def compare_database(**kwargs):
 
     imptables=read_config('import','tables')
     impconvcharset = read_config('import','convertcharset')
+    imprenamedb = read_config('import','renamedb')
     impuser = read_config('import','username')
     imppass = read_config('import','password')
     if (imppass==''):
@@ -2504,8 +2556,32 @@ def compare_database(**kwargs):
 
         l_cmpalldb=dblist_expimp(l_impalldb,l_expalldb)
 
+    if imprenamedb!=None or imprenamedb!="":
+        if (len(imprenamedb.split(","))>1):
+            for l_ordb in imprenamedb.split(","):
+               l_mapdb=l_ordb.split(":")
+               l_curdb=l_mapdb[0]
+               l_newdb=l_mapdb[1]
+               if l_curdb in l_cmpalldb:
+                  g_renamedb[l_curdb]=l_newdb
+
+        else:
+            l_mapdb=imprenamedb.split(":")
+            l_curdb=l_mapdb[0]
+            l_newdb=l_mapdb[1]
+            if l_curdb in l_cmpalldb:
+               if l_curdb in l_cmpalldb:
+                  g_renamedb[l_curdb]=l_newdb
+
     for expdatabase in l_cmpalldb:
-       impdatabase=expdatabase
+       if g_renamedb!={}:
+          if expdatabase in g_renamedb:
+             impdatabase=g_renamedb[expdatabase]
+          else:
+             impdatabase=expdatabase
+       else:
+          impdatabase=expdatabase
+
        log_result(expdatabase+"/compare_"+expdatabase+".log")
        logging.info("Comparing Between Source and Target Database "+Yellow+expdatabase)
        while test_connection(expuser,exppass,expserver,expport,expdatabase,expca)==1:
@@ -2601,8 +2677,6 @@ def compare_database(**kwargs):
            for tbl in alltbls:
 
                l_orderby=form_orderby(tbl[0],scursor)
-
-               print(l_orderby)
 
                logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
                query="select * from `"+tbl[0]+"` order by "+l_orderby
@@ -3069,7 +3143,7 @@ def main():
        usage()
        sys.exit(2)
 
-    global mode,cfgmode,tblcharset,retdblist,g_removedb,g_tblbinlob
+    global mode,cfgmode,tblcharset,retdblist,g_removedb,g_tblbinlob,g_renamedb
     global impconnection
     global config,configfile
     global esc,sep1,eol,crlf,quote
@@ -3081,6 +3155,7 @@ def main():
     g_removedb=False
     g_tblbinlob={}
     l_mig=[]
+    g_renamedb={}
     #disctionary of character set with key= "import" or "export" and value="character set"
     tblcharset={}
     #dictionary of database list with key="import" or "export" and value="database"
