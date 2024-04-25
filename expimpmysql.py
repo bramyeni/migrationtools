@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 617 2024-04-25 15:13:58Z bpahlawa $
+# $Id: expimpmysql.py 618 2024-04-25 23:32:57Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-25 23:13:58 +0800 (Thu, 25 Apr 2024) $
-# $Revision: 617 $
+# $Date: 2024-04-26 07:32:57 +0800 (Fri, 26 Apr 2024) $
+# $Revision: 618 $
 
 import re
 from string import *
@@ -1297,10 +1297,16 @@ def import_data(**kwargs):
         if (getcharset!=gicharset):
             logging.info("Source database original character set and collation is : "+getcharset+" "+getcollation)
             logging.info("Target database original character set and collation is : "+gicharset+" "+gicollation)
-            logging.info("Source and Target database must have the same character set and collation")
-            continue
-    
-    
+            #logging.info("Source and Target database must have the same character set and collation")
+            logging.info("Enforcing character set to higher bits which is UTF8")
+            if re.findall("utf8",getcharset)!=[]:
+                gicharset=getcharset
+            elif re.findall("utf8",gicharset)!=[]:
+                getcharset=gicharset
+            else
+                getcharset="utf8"
+                gicharset="utf8"
+
         impsetvars=set_params()
     
         logging.info("Importing Data to Database: "+impdatabase+" Server: "+impserver+":"+impport+" username: "+impuser)
@@ -2554,7 +2560,7 @@ def compare_database(**kwargs):
 
         l_cmpalldb=dblist_expimp(l_impalldb,l_expalldb)
 
-    if imprenamedb!=None or imprenamedb!="":
+    if imprenamedb!=None and imprenamedb!="":
         if (len(imprenamedb.split(","))>1):
             for l_ordb in imprenamedb.split(","):
                l_mapdb=l_ordb.split(":")
