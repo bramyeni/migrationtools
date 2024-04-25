@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 614 2024-04-24 06:02:06Z bpahlawa $
+# $Id: expimpmysql.py 615 2024-04-25 08:40:52Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-24 14:02:06 +0800 (Wed, 24 Apr 2024) $
-# $Revision: 614 $
+# $Date: 2024-04-25 16:40:52 +0800 (Thu, 25 Apr 2024) $
+# $Revision: 615 $
 
 import re
 from string import *
@@ -368,7 +368,7 @@ def rawincountgz(filename):
     try:
        f = pgzip.open(filename, 'rt', thread=0)
        bufgen = takewhile(lambda x: x, (f.read(8192*1024) for _ in repeat(None)))
-       return sum( buf.count(eol+crlf) for buf in bufgen )
+       return sum( buf.count(eol) for buf in bufgen )
     except (Exception,pymysql.Error) as error:
        if (str(error).find("CRC")!=-1):
           return 0
@@ -379,15 +379,19 @@ def rawincountgz(filename):
 
 #procedure to count number of rows within regaulr file
 def rawincountreg(filename):
-    f = open(filename, 'rt')
-    bufgen = takewhile(lambda x: x, (f.read(8192*1024) for _ in repeat(None)))
-    return sum( buf.count(eol+crlf) for buf in bufgen )
+    try:
+       with open(filename,"rt") as f:
+           #count no of lines based on "`"+eol+crlf or quote+eol+crlf or esc+N+oel+crlf
+           return(sum(1 if(re.findall("`"+eol+crlf+"|"+quote+eol+crlf+"|"+esc+"N"+eol+crlf,buf)) else 0 for buf in f))
+    except Exception as error:
+       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+       return(0)
 
 def rawincount(filename):
     try:
        with pgzip.open(filename, 'rt',thread=0) as f:
            #return(sum(1 if(re.search(sep1+".*"+eol+crlf,buf)) else 0 for buf in f))
-           return(sum(1 if(re.findall(sep1+eol+crlf+"|"+quote+eol+crlf+"|"+esc+"N"+eol+crlf,buf)) else 0 for buf in f))
+           return(sum(1 if(re.findall("`"+eol+crlf+"|"+quote+eol+crlf+"|"+esc+"N"+eol+crlf,buf)) else 0 for buf in f))
     except Exception as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        return(0)
@@ -883,8 +887,8 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
 
        for l_dtype in g_tblbinlob[tablename]:
            if re.findall(".*(lob|binary).*",g_tblbinlob[tablename][l_dtype])!=[]:
-               print(g_tblbinlob[tablename][l_dtype])
-               print(l_dtype)
+               #print(g_tblbinlob[tablename][l_dtype])
+               #print(l_dtype)
                l_setcmd+="`"+l_dtype+"` = UNHEX(@"+l_dtype+"), "
                l_allcols=l_allcols.replace("`"+l_dtype+"`","@"+l_dtype)
        if l_setcmd=="SET ":
@@ -911,7 +915,7 @@ CHARACTER SET {5} fields terminated by '{6}' OPTIONALLY ENCLOSED BY '{7}' ESCAPE
 """
 
 
-       print(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
+       #print(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
        #curinsdata.execute("LOAD DATA INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` "+l_strcol+l_setcmd+"CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
 
        if l_nocontent==False:
@@ -1031,7 +1035,7 @@ def verify_data(tablefile,impuser,imppass,impserver,impport,impcharset,impdataba
        #else:
        logging.info(mprocessid+" Counting no of rows from file(s) \033[1;34;40m"+dirname+"/"+tablename+".*csv"+"\033[1;37;40m")
        for thedumpfile in glob.glob(dirname+"/"+tablename+".*.csv.gz"):
-           rowsfromfile+=rawincountgz(thedumpfile)
+           rowsfromfile+=rawincount(thedumpfile)
 
        for thedumpfile in glob.glob(dirname+"/"+tablename+".csv.gz"):
            rowsfromfile+=rawincount(thedumpfile)
@@ -1326,14 +1330,13 @@ def import_data(**kwargs):
                  if imptables=="all":
                      #check whether regular csv file available
                      if os.path.isfile(impdatabase+"/"+row[0]+".csv"):
-                        slicefiletot=0
                         logging.info("Comparing total rows within file \033[1;34;40m"+impdatabase+"/"+row[0]+".csv"+"\033[1;32;40m and total rows within sliced files are in progress\033[1;37;40m")
-       
                         #count regular csv file lines
                         origfiletot=rawincountreg(impdatabase+"/"+row[0]+".csv") 
                         #count gzipped csv file lines
-                        ctlines = os.popen("zcat "+impdatabase+"/"+row[0]+".*.csv.gz 2>/dev/null | wc -l")
-                        slicefiletot = int(ctlines.read())
+                        slicefiletot=0
+                        for thefile in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"):
+                            slicefiletot+=rawincount(thefile)
        
                         #compareing regular and gzipped file's lines
                         if (origfiletot!=slicefiletot):
@@ -1417,11 +1420,11 @@ def import_data(**kwargs):
                          else:
                             #check whether csv regular file exists
                             if os.path.isfile(impdatabase+"/"+row[0]+".csv"):
-                               slicefiletot=0
                                logging.info("Comparing total rows within file \033[1;34;40m"+impdatabase+"/"+row[0]+".csv"+"\033[1;32;40m and total rows within sliced files are in progress\033[1;37;40m")
                                origfiletot=rawincountreg(impdatabase+"/"+row[0]+".csv")
-                               ctlines = os.popen("zcat "+impdatabase+"/"+row[0]+".*.csv.gz 2>/dev/null | wc -l")
-                               slicefiletot = int(ctlines.read())
+                               slicefiletot=0
+                               for thefile in glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"):
+                                   slicefiletot+=rawincount(thefile)
           
                                #if not the same between regular and gzipped file then slice it based on improwchunk config 
                                if (origfiletot!=slicefiletot):
@@ -1834,13 +1837,16 @@ def spool_data(tbldata,expuser,exppass,expserver,expport,expcharset,expdatabase,
 
        rowcount=0
        for thedumpfile in glob.glob(expdatabase+"/"+tbldata+".csv.gz"):
-          rowcount+=rawincountgz(thedumpfile)-1
+          rowcount+=rawincount(thedumpfile)-1
 
        for thedumpfile in glob.glob(expdatabase+"/"+tbldata+".*.csv.gz"):
-          rowcount+=rawincountgz(thedumpfile)-1
+          rowcount+=rawincount(thedumpfile)-1
        
        if (rowcount==-1):
           rowcount=0
+
+       if (rowcount>0):
+           rowcount-=1
 
        logging.info("Total no of rows exported from table \033[1;34;40m"+tbldata+"\033[0;37;40m = \033[1;36;40m"+str(rowcount))
 
@@ -2417,6 +2423,26 @@ def dblist_expimp(l_impalldb,l_expalldb):
 
     return(l_cmpalldb)
 
+def form_orderby(tablename,thecursor):
+    try:
+       l_query="show keys from "+tablename+" where key_name='PRIMARY'"
+       l_rows=thecursor.execute(l_query)
+       if l_rows==0:
+          l_query="show keys from "+tablename+" where key_name like '%unique%'"
+          l_rows=thecursor.execute(l_query)
+   
+       if l_rows==0:
+           return("1")
+   
+       l_orderby=""
+       for i in range(1,l_rows+1):
+           l_orderby+=str(i)+","
+   
+       return(l_orderby[:-1])
+    except (Exception,pymysql.Error) as error:
+        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+    
+
 def compare_database(**kwargs):
     global cfgmode,retdblist,g_dblist
     expserver = read_config('export','servername')
@@ -2569,24 +2595,24 @@ def compare_database(**kwargs):
            currtime=None
            l_mismatches={}
 
-           for tbl in alltbls:
-               q_pk="show keys from `"+tbl[0]+"` where key_name='PRIMARY'"
-               srows=scursor.execute(q_pk)
-               l_orderby=""
-               for i in range(1,srows+1):
-                   l_orderby+=str(i)+","
 
-               if l_orderby=="":
-                  l_orderby="1,"
+           l_orderby="1"
+
+           for tbl in alltbls:
+
+               l_orderby=form_orderby(tbl[0],scursor)
+
+               print(l_orderby)
 
                logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
-               query="select * from `"+tbl[0]+"` order by "+l_orderby[:-1]
+               query="select * from `"+tbl[0]+"` order by "+l_orderby
+
                try:
                   srows=scursor.execute(query)
                   fields=""
                   for col in scursor.description:
                       fields+="`"+col[0]+"`,"
-                  query="select "+fields[:-1]+" from `"+tbl[0]+"` order by "+l_orderby[:-1]
+                  query="select "+fields[:-1]+" from `"+tbl[0]+"` order by "+l_orderby
 
                except (Exception,pymysql.Error) as error:
                   if re.findall("codec|Connection reset by peer",str(error))!=[]:
@@ -2602,7 +2628,7 @@ def compare_database(**kwargs):
                       fields=""
                       for col in scursor.description:
                           fields+="`"+col[0]+"`,"
-                      query="select "+fields[:-1]+" from `"+tbl[0]+"` order by "+l_orderby[:-1]
+                      query="select "+fields[:-1]+" from `"+tbl[0]+"` order by "+l_orderby
                   else:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Source DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
 
