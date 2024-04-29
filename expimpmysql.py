@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 620 2024-04-29 02:30:32Z bpahlawa $
+# $Id: expimpmysql.py 621 2024-04-29 03:51:35Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-29 10:30:32 +0800 (Mon, 29 Apr 2024) $
-# $Revision: 620 $
+# $Date: 2024-04-29 11:51:35 +0800 (Mon, 29 Apr 2024) $
+# $Revision: 621 $
 
 import re
 from string import *
@@ -2519,7 +2519,6 @@ def form_orderby(tablename,thecursor):
        logging.info("Retrieving PRIMAY key columns from table "+tablename+" for forming order by clause")
        l_query="show keys from `"+tablename+"` where key_name='PRIMARY'"
        l_rows=thecursor.execute(l_query)
-       print(thecursor.fetchall())
        if l_rows==0:
           logging.info("This table "+tablename+" doesnt have PRIMARY key column(s), Retriving unique Keys instead!")
           l_query="show keys from `"+tablename+"` where key_name like '%unique%'"
