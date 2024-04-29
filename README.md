@@ -15,6 +15,9 @@ Scripts to Perform Database Migrations built by me using Python3
 - Import all tables or choose multiple tables separated by comma
 - Compare the rowcount between exported file and imported data
 - Compare source and target database hash values on every single row of all tables (using xxhash)
+- Apart from 1 log file for all activities, it also creates individual log file / database (export_DBNAME.log, import_DBNAME.log and compare_DBNAME.log)
+- Autorotate log files (backup previous log files) up to 5 times
+- For multiple databases, it can choose either performing complete migration for all stages (export, import, compare) per database OR all database per stage  
 
 # Source db and Target db
 At present my script will incorporate only few DB migrations and only OFFLINE migration for now
