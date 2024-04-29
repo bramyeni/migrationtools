@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 618 2024-04-25 23:32:57Z bpahlawa $
+# $Id: expimpmysql.py 620 2024-04-29 02:30:32Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-26 07:32:57 +0800 (Fri, 26 Apr 2024) $
-# $Revision: 618 $
+# $Date: 2024-04-29 10:30:32 +0800 (Mon, 29 Apr 2024) $
+# $Revision: 620 $
 
 import re
 from string import *
@@ -23,6 +23,7 @@ import signal
 import io
 import glob
 import logging
+from logging.handlers import RotatingFileHandler
 import datetime
 import readline
 import shutil
@@ -919,6 +920,7 @@ CHARACTER SET {5} fields terminated by '{6}' OPTIONALLY ENCLOSED BY '{7}' ESCAPE
        #curinsdata.execute("LOAD DATA INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` "+l_strcol+l_setcmd+"CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
 
        if l_nocontent==False:
+          curinsdata.execute("set innodb_lock_wait_timeout="+implocktimeout)
           curinsdata.execute(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
    
           for warnmsg in insconnection.show_warnings():
@@ -1045,12 +1047,12 @@ def verify_data(tablefile,impuser,imppass,impserver,impport,impcharset,impdataba
        if (rowsfromfile>0):
           rowsfromfile-=1
        if rowsfromfile==rowsfromtable:
-          logging.info(mprocessid+" Table \033[1;34;40m"+tablename+"\033[0;37;40m no of rows: \033[1;36;40m"+str(rowsfromfile)+" does match!\033[1;36;40m")
+          logging.info(mprocessid+" Table \033[1;34;40m"+tablename+"\033[0;37;40m no of rows: \033[1;36;40m"+str(rowsfromfile)+" MATCH\033[1;36;40m")
           for flagfile in glob.glob(dirname+"/"+tablename+".*.flag"):
               if os.path.isfile(flagfile): os.remove(flagfile)
 
        else:
-          logging.info(mprocessid+" Table \033[1;34;40m"+tablename+"\033[1;31;40m DOES NOT match\033[1;37;40m")
+          logging.info(mprocessid+" Table \033[1;34;40m"+tablename+"\033[1;31;40m NOT MATCH\033[1;37;40m")
           logging.info(mprocessid+"       Total Rows from \033[1;34;40m"+tablename+" file(s) = \033[1;31;40m"+str(rowsfromfile))
           logging.info(mprocessid+"       Total Rows inserted to \033[1;34;40m"+tablename+"  = \033[1;31;40m"+str(rowsfromtable))
        
@@ -1098,9 +1100,15 @@ def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
        dbconnection.close()
        return(0)
     except (Exception, pymysql.Error) as logerr:
-       if (str(logerr).find("Access Denied")>0):
+       if (str(logerr).find("Access denied")>0):
           logging.info("\033[1;31;40m"+str(logerr))
+          logging.info("\033[1;31;40mYou may need to login as User that has sufficient privileges, if this is due to wrong password you can keep trying, However, if it is not then please press ctrl+C to exit")
           return(1)
+       elif (str(logerr).find("Unknown database")>0):
+          if test_connection(t_user,t_pass,t_server,t_port,"mysql",t_ca)==1:
+             sys.exit()
+          else:
+             return(100)
        elif (str(logerr).find("Can't connect to"))>0:
           logging.info("\033[1;31;40m"+str(logerr)+" ,Exiting......\033[0m")
           if(impconnection): impconnection.close()
@@ -1112,7 +1120,7 @@ def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
 
 #procedure to import data
 def import_data(**kwargs):
-    global imptables,config,configfile,curimptbl,gicharset,improwchunk,implocktimeout,sharedvar,resultlist,impoldvars,impdatabase,g_dblist,g_tblbinlob
+    global imptables,config,configfile,curimptbl,gicharset,improwchunk,implocktimeout,sharedvar,resultlist,impoldvars,impdatabase,g_dblist,g_tblbinlob,g_renamedb
     #Loading import configuration from mysqlconfig.ini file
     impserver = read_config('import','servername')
     impport = read_config('import','port')
@@ -1139,7 +1147,6 @@ def import_data(**kwargs):
 
     l_impalldb=[]
 
-    log_result(mainlogfilename)
 
     #if databases are separarted by comma
     if (len(impdatabase.split(","))>1):
@@ -1171,7 +1178,7 @@ def import_data(**kwargs):
                   logging.info("Importing database "+Yellow+l_dblist+Green)
                   l_impalldb.append(l_dblist)
            else:
-              logging.info("Exported files for database "+Yellow+dblist+Green+" are not complete, consider re-exporting..")
+              logging.info("Exported files for database "+Yellow+l_dblist+Green+" are not complete, consider re-exporting..")
 
     #the same logic as the above for all databases
     elif impdatabase=="all":
@@ -1263,8 +1270,8 @@ def import_data(**kwargs):
                  pass
 
     for impdatabase in l_impalldb: 
-
-        log_result(impdatabase+"/import_"+impdatabase+".log")
+        l_rfhandler=None
+        l_rfhandler=log_result(impdatabase+"/import_"+impdatabase+".log")
 
         logging.info("\033[1;33mTarget database is : "+impdatabase)
         create_database(impdatabase,impuser,imppass,impserver,impport,"utf8",impca)
@@ -1303,7 +1310,7 @@ def import_data(**kwargs):
                 gicharset=getcharset
             elif re.findall("utf8",gicharset)!=[]:
                 getcharset=gicharset
-            else
+            else:
                 getcharset="utf8"
                 gicharset="utf8"
 
@@ -1640,12 +1647,18 @@ def import_data(**kwargs):
 
 
         finally:
+           log=logging.getLogger()
            if (impconnection):
               curimptbl.close()
               impconnection.close()
-              logging.error("\033[1;37;40mDatabase import connections are closed")
+              logging.info("\033[1;37;40mDatabase import connections are closed")
+              if l_rfhandler!=None:
+                 log.removeHandler(l_rfhandler)
            if (kwargs.get('insequence',None)!=None):
-              compare_database(insequence=impdatabase)
+              if l_rfhandler!=None:
+                 log.removeHandler(l_rfhandler)
+              g_renamedb={}
+              compare_database(insequence=expdatabase)
 
 def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdatabase,expca):
     global tblcharset
@@ -2087,7 +2100,10 @@ def check_databases(l_dblist,auser,apass,aserver,aport,gecharset,aca):
               check_databases(thedb,auser,checkpass,aserver,aport,gecharset,aca)
     else:
        gecharcollation=gather_database_charset(aserver,aport,l_dblist,"ADMIN",dbuser=auser,dbpass=checkpass)
-       gecharset=gecharcollation[0]
+       if gecharcollation!=None:
+          gecharset=gecharcollation[0]
+       else:
+          return
        try:
            aconn = pymysql.connect(user=auser,
                            password=checkpass,
@@ -2123,7 +2139,8 @@ def get_all_info(**kwargs):
        exppass=' ';
     exppass=decode_password(exppass)
 
-    auser=input('Enter admin username@'+aserver+' :')
+    #auser=input('Enter admin username@'+aserver+' :')
+    auser=expuser
     dblist=kwargs.get('dblist',None)
 
     #Create directory to spool all export files
@@ -2267,6 +2284,9 @@ def gather_database_charset(lserver,lport,ldatabase,targetdb,**kwargs):
     if test_connection(luser,lpass,lserver,lport,ldatabase,lca)==1:
        logging.error("\033[1;31;40mSorry, user: \033[1;36;40m"+luser+"\033[1;31;40m not available or password was wrong!!, please check specified parameters or a config file :"+configfile)
        sys.exit(2)
+    elif test_connection(luser,lpass,lserver,lport,ldatabase,lca)==100:
+       logging.error("\033[1;31;40mSorry, Database: \033[1;36;40m"+ldatabase+"\033[1;31;40m not available, please check config file :"+configfile)
+       return
 
     logging.info("Gathering Character set information from database "+ldatabase)
     try:
@@ -2304,7 +2324,8 @@ def get_all_variables():
        exppass=' ';
     exppass=decode_password(exppass)
 
-    suser=input('Enter admin username@'+expserver+' :')
+    #suser=input('Enter admin username@'+expserver+' :')
+    suser=expuser
     if (suser!=expuser):
        spass=getpass.getpass('Enter Password for '+suser+' :').replace('\b','')
        while test_connection(suser,spass,expserver,expport,'mysql',expca)==1:
@@ -2327,7 +2348,8 @@ def get_all_variables():
        imppass=' ';
     imppass=decode_password(imppass)
 
-    tuser=input('Enter admin username@'+impserver+' :')
+    #tuser=input('Enter admin username@'+impserver+' :')
+    tuser=impuser
     if (tuser!=impuser):
        tpass=getpass.getpass('Enter Password for '+tuser+' :').replace('\b','')
        while test_connection(tuser,tpass,impserver,impport,'mysql',impca)==1:
@@ -2479,27 +2501,55 @@ def dblist_expimp(l_impalldb,l_expalldb):
     return(l_cmpalldb)
 
 def form_orderby(tablename,thecursor):
+    l_tblinfo=[]
     try:
+       l_query="select * from `"+tablename+"` limit 1"
+       thecursor.execute(l_query)
+       l_fields=""
+       l_cols=0
+       for col in thecursor.description:
+           l_cols+=1
+           l_fields+="`"+col[0]+"`,"
+
+       if (l_fields!=""):
+           l_tblinfo.append(l_fields[:-1])
+       else:
+           l_tblinfo.append("*")
+
+       logging.info("Retrieving PRIMAY key columns from table "+tablename+" for forming order by clause")
        l_query="show keys from `"+tablename+"` where key_name='PRIMARY'"
        l_rows=thecursor.execute(l_query)
+       print(thecursor.fetchall())
        if l_rows==0:
+          logging.info("This table "+tablename+" doesnt have PRIMARY key column(s), Retriving unique Keys instead!")
           l_query="show keys from `"+tablename+"` where key_name like '%unique%'"
           l_rows=thecursor.execute(l_query)
-   
-       if l_rows==0:
-           return("1")
-   
+
        l_orderby=""
-       for i in range(1,l_rows+1):
-           l_orderby+=str(i)+","
-   
-       return(l_orderby[:-1])
+       if l_rows==0:
+          for i in range(1,l_cols+1):
+             l_orderby+=str(i)+","
+       else:
+          for i in range(1,l_rows+1):
+             l_orderby+=str(i)+","
+
+       if (l_orderby!=""):
+          l_tblinfo.append(l_orderby[:-1])
+       else:
+          l_tblinfo.append("1")
+
+
     except (Exception,pymysql.Error) as error:
-        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+       return([])
+
+    finally:
+       return(l_tblinfo)
+
     
 
 def compare_database(**kwargs):
-    global cfgmode,retdblist,g_dblist
+    global cfgmode,retdblist,g_dblist,g_renamedb
     expserver = read_config('export','servername')
     expport = read_config('export','port')
     expdatabase = read_config('export','database')
@@ -2528,13 +2578,12 @@ def compare_database(**kwargs):
        imppass=' ';
     imppass=decode_password(imppass)
 
-    log_result(mainlogfilename)
 
     l_cmpalldb=[]
 
     if (kwargs.get('insequence',None)!=None):
-        impdatabase=kwargs.get('insequence')
         expdatabase=kwargs.get('insequence')
+        impdatabase=kwargs.get('insequence')
         l_cmpalldb.append(expdatabase)
     else:
         #if list of database is specified then use the parameter rather than config file
@@ -2558,7 +2607,11 @@ def compare_database(**kwargs):
         l_impalldb=retdblist["import"]
         l_expalldb=retdblist["export"]
 
-        l_cmpalldb=dblist_expimp(l_impalldb,l_expalldb)
+        if (l_impalldb!=[] and l_expalldb!=[]):
+           l_cmpalldb=dblist_expimp(l_impalldb,l_expalldb)
+        else:
+           logging.info(Red+"No Database exists to compare rowdata!!, exiting...")           
+           sys.exit()
 
     if imprenamedb!=None and imprenamedb!="":
         if (len(imprenamedb.split(","))>1):
@@ -2578,6 +2631,7 @@ def compare_database(**kwargs):
                   g_renamedb[l_curdb]=l_newdb
 
     for expdatabase in l_cmpalldb:
+       l_rfhandler=None
        if g_renamedb!={}:
           if expdatabase in g_renamedb:
              impdatabase=g_renamedb[expdatabase]
@@ -2586,8 +2640,12 @@ def compare_database(**kwargs):
        else:
           impdatabase=expdatabase
 
-       log_result(expdatabase+"/compare_"+expdatabase+".log")
-       logging.info("Comparing Between Source and Target Database "+Yellow+expdatabase)
+       l_rfhandler=log_result(expdatabase+"/compare_"+expdatabase+".log")
+       if (expdatabase==impdatabase):
+          logging.info("Comparing Between Source and Target Database "+Yellow+expdatabase)
+       else:
+          logging.info("Comparing Between Source Database : "+Yellow+expdatabase+Green+" and Target Database : "+Yellow+impdatabase)
+
        while test_connection(expuser,exppass,expserver,expport,expdatabase,expca)==1:
            exppass=getpass.getpass('Enter Password for '+expuser+' :').replace('\b','')
        obfuscatedpass=encode_password(exppass)
@@ -2676,37 +2734,35 @@ def compare_database(**kwargs):
            l_mismatches={}
 
 
-           l_orderby="1"
-
            for tbl in alltbls:
 
-               l_orderby=form_orderby(tbl[0],scursor)
+               l_tblinfo=[]
+               try:
+                  l_tblinfo=form_orderby(tbl[0],scursor)
+               except (Exception,pymysql.Error) as error:
+                  if re.findall("Connection reset by peer",str(error))!=[]:
+                      sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
+                      scursor=sconn.cursor()
+                      l_tblinfo=form_orderby(tbl[0],scursor)
+
 
                logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
-               query="select * from `"+tbl[0]+"` order by "+l_orderby
+               query="select "+l_tblinfo[0]+" from `"+tbl[0]+"` order by "+l_tblinfo[1]
 
                try:
                   srows=scursor.execute(query)
-                  fields=""
-                  for col in scursor.description:
-                      fields+="`"+col[0]+"`,"
-                  query="select "+fields[:-1]+" from `"+tbl[0]+"` order by "+l_orderby
 
                except (Exception,pymysql.Error) as error:
                   if re.findall("codec|Connection reset by peer",str(error))!=[]:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Source DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
                       sconn.close
-                      if gecharset in "utf8":
+                      if gecharset in "utf8" and gecharset!="utf8":
                           gecharset="utf8mb4"
                       else:
                           gecharset="utf8"
                       sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
                       scursor=sconn.cursor()
                       srows=scursor.execute(query)
-                      fields=""
-                      for col in scursor.description:
-                          fields+="`"+col[0]+"`,"
-                      query="select "+fields[:-1]+" from `"+tbl[0]+"` order by "+l_orderby
                   else:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Source DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
 
@@ -2716,7 +2772,7 @@ def compare_database(**kwargs):
                   if re.findall("codec|Connection reset by peer",str(error))!=[]:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Target DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
                       tconn.close
-                      if gicharset in "utf8":
+                      if gicharset in "utf8" and gicharset!="utf8":
                           gicharset="utf8mb4"
                       else:
                           gicharset="utf8"
@@ -2748,7 +2804,7 @@ def compare_database(**kwargs):
                       print(tdata)
                       l_mism=l_mism+1
                       currtime=str(datetime.datetime.now())
-                      print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCHED!! (charset="+gecharset+")"+Coloff,end="\n",flush=True)
+                      print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCH!! (charset="+gecharset+")"+Coloff,end="\n",flush=True)
                       logging.info(query+" (select *,row_number() over () rownum from `"+tbl[0]+"`) tbl where tbl.rownum="+str(i))
                       l_mismatches[tbl[0]]=str(l_mism)
                    else:
@@ -2785,6 +2841,9 @@ def compare_database(**kwargs):
               tconn.close()
            tconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
            tcursor=tconn.cursor()
+           log=logging.getLogger()
+           if l_rfhandler!=None:
+              log.removeHandler(l_rfhandler)
            pass
 
 #callback after exporting data
@@ -2915,15 +2974,17 @@ def export_data(**kwargs):
 
 
     for expdatabase in l_expalldb:
+        l_rfhandler=None
         tblcharset={}
-        log_result(mainlogfilename)
 
         #Create directory to spool all export files
         if os.path.exists(expdatabase):
             if (glob.glob(expdatabase+"/*.gz")!=[] and glob.glob(expdatabase+"/*.sql")!=[]):
                 if (forcexp):
-                    logging.info("Forced to re-export!, Removing directory "+expdatabase+" and its contents")
-                    shutil.rmtree(expdatabase)
+                    logging.info("Forced to re-export!, Removing files under "+expdatabase)
+                    l_files2del = glob.glob(expdatabase+"/*.gz") + glob.glob(expdatabase+"/*.sql")
+                    for l_file2del in l_files2del:
+                        os.remove(l_file2del)
                 else:
                     logging.info("Exported files for database "+Yellow+expdatabase+Green+" exist, skipping export..")
                     if (mode!="script"):
@@ -3103,27 +3164,28 @@ def export_data(**kwargs):
               curtblinfo.close()
               expconnection.close()
               logging.info("\033[1;37;40mDatabase export connections are closed")
+              if l_rfhandler!=None:
+                 log.removeHandler(l_rfhandler)
            if (kwargs.get('insequence',None)!=None):
               cfgmode='import'
+              if l_rfhandler!=None:
+                 log.removeHandler(l_rfhandler)
               import_data(insequence=expdatabase)
-
 #Log result logfilename and default loglevel
-def log_result(logfilename,loglevel="INFO"):
+def log_result(logfilename):
     dtnow=datetime.datetime.now()
-    nlevel=getattr(logging,loglevel.upper(),None)
-
-    if not isinstance(nlevel, int):
-        raise ValueError('Invalid log level: %s' % loglevel)
+    l_rfhandler=None
 
     try:
        log=logging.getLogger()
-       for hdlr in log.handlers[:]:
-           log.removeHandler(hdlr)
-
-       datefrmt = "\033[1;37;40m%(asctime)-15s \033[1;32;40m%(message)s \033[1;37;40m"
-       fileh=logging.FileHandler(logfilename)
-       logging.basicConfig(level=nlevel,format=datefrmt,handlers=[fileh,logging.StreamHandler()])
-       #log.addHandler(fileh)
+       l_rfhandler = RotatingFileHandler(logfilename, maxBytes=1000000, backupCount=5)
+       formatter = logging.Formatter("\033[1;37;40m%(asctime)-15s \033[1;32;40m%(message)s \033[1;37;40m")
+       l_rfhandler.setFormatter(formatter)
+       l_rfhandler.setLevel(logging.DEBUG)
+       log.addHandler(l_rfhandler)
+       if (os.path.isfile(logfilename) and os.path.getsize(logfilename) > 0):
+          l_rfhandler.doRollover()
+       return(l_rfhandler)
 
     except (Exception,pymysql.Error) as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
@@ -3152,6 +3214,13 @@ def main():
     global config,configfile
     global esc,sep1,eol,crlf,quote
     global dblist,forcexp,g_dblist
+
+    fileh = RotatingFileHandler(mainlogfilename, maxBytes=10000000, backupCount=5)
+    if (os.path.isfile(mainlogfilename) and os.path.getsize(mainlogfilename) > 0):
+       fileh.doRollover()
+    fileh.setLevel(logging.DEBUG)
+    logging.basicConfig(level=logging.DEBUG,format="\033[1;37;40m%(asctime)-15s \033[1;32;40m%(message)s \033[1;37;40m",handlers=[fileh,logging.StreamHandler()])
+
     dblist=None
     g_dblist=None
     verbose = False
@@ -3222,7 +3291,6 @@ def main():
 
     try: 
        configfile='mysqlconfig.ini'
-       log_result(mainlogfilename)
 
        dtnow=datetime.datetime.now()
        logging.info(dtnow.strftime("Starting Program %d-%m-%Y %H:%M:%S"))
@@ -3288,8 +3356,6 @@ def main():
           else:
              sys.exit()
 
-       
-       log_result(mainlogfilename)
 
     except (Exception,configparser.Error) as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
