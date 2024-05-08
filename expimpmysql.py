@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 621 2024-04-29 03:51:35Z bpahlawa $
+# $Id: expimpmysql.py 622 2024-05-08 10:20:51Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-04-29 11:51:35 +0800 (Mon, 29 Apr 2024) $
-# $Revision: 621 $
+# $Date: 2024-05-08 18:20:51 +0800 (Wed, 08 May 2024) $
+# $Revision: 622 $
 
 import re
 from string import *
@@ -309,7 +309,7 @@ def debugit(l_param,l_value):
              l_theval=l_value
         else:
              l_theval=str(l_value)
-        print(l_param+" = "+l_theval)
+        print(Cyan+l_param+Yellow+" = "+l_theval+Coloff)
     except Exception as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
 
@@ -620,7 +620,7 @@ def generate_create_table(tablename):
 
 #procedure to create table
 def create_table():
-    global impconnection,impdatabase,tblcharset,g_tblbinlob
+    global impconnection,impdatabase,tblcharset,g_tblbinlob,g_tblnamelow
     curcrtable=impconnection.cursor()
     createtable=""
     crtblfailed=[]
@@ -655,10 +655,10 @@ def create_table():
                 impconnection.commit()
              except (Exception,pymysql.Error) as error:
                 #capture error if foreign key constraint is incorrectl formed
-                if re.findall("Foreign key constraint is incorrectly formed",str(error))!=[]:
+                if re.findall("Foreign key constraint is incorrectly formed",str(error),re.IGNORECASE)!=[]:
                    crtblfailed.append(createtable+line) 
                 #if table already exist skip
-                elif re.findall("already exists",str(error))!=[]:
+                elif re.findall("already exists",str(error),re.IGNORECASE)!=[]:
                    pass
                 #if error other than the above then
                 else:
@@ -678,9 +678,11 @@ def create_table():
              if (line.find("CREATE TABLE") != -1):
                  #get the tablename by using regex
                  tblname=re.findall("CREATE TABLE `(.*)` ",line)
+                 g_tblnamelow[tblname[0].lower()]=tblname[0]
                  g_tblbinlob[tblname[0]]={}
              else:
                  l_colname=re.findall("^\s*`([a-zA-Z0-9_\-\"]+)` ([A-Za-z0-9\(\)]+) .*[,|\n]",line)
+                 #debugit('l_colname',l_colname)
                  if l_colname!=[]:
                     g_tblbinlob[tblname[0]][l_colname[0][0]]=l_colname[0][1]
 
@@ -824,6 +826,17 @@ def insert_data(tablename):
 
     except (Exception,pymysql.Error) as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+
+#convert dictionary key to lower
+def keys_lower(srcdict,keyname):
+    dest = dict()
+    for key in srcdict.keys():
+        if lower(key)==keyname:
+           if isinstance(srcdict[key], dict):
+              dest[key.lower()] = keys_lower(srcdict[key],key)
+           else:
+              dest[key.lower()] = srcdict[key]
+        return dest
  
 #insert data from file
 def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset,impdatabase,improwchunk,dirname,impca):
@@ -886,8 +899,18 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
            if fread.readline():
               l_nocontent=False 
 
-       for l_dtype in g_tblbinlob[tablename]:
-           if re.findall(".*(lob|binary).*",g_tblbinlob[tablename][l_dtype])!=[]:
+       #print("---------------------------------------------------------------------------")
+       #print("TABLENAME :"+tablename)
+       #print(g_tblbinlob[tablename])
+       #print("---------------------------------------------------------------------------")
+
+       if g_tblnamelow[tablename]!=tablename: 
+          k_tablename=g_tblnamelow[tablename]
+       else:
+          k_tablename=tablename
+
+       for l_dtype in g_tblbinlob[k_tablename]:
+           if re.findall(".*(lob|binary).*",g_tblbinlob[k_tablename][l_dtype])!=[]:
                #print(g_tblbinlob[tablename][l_dtype])
                #print(l_dtype)
                l_setcmd+="`"+l_dtype+"` = UNHEX(@"+l_dtype+"), "
@@ -1120,7 +1143,7 @@ def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
 
 #procedure to import data
 def import_data(**kwargs):
-    global imptables,config,configfile,curimptbl,gicharset,improwchunk,implocktimeout,sharedvar,resultlist,impoldvars,impdatabase,g_dblist,g_tblbinlob,g_renamedb
+    global imptables,config,configfile,curimptbl,gicharset,improwchunk,implocktimeout,sharedvar,resultlist,impoldvars,impdatabase,g_dblist,g_tblbinlob,g_renamedb,g_tblnamelow
     #Loading import configuration from mysqlconfig.ini file
     impserver = read_config('import','servername')
     impport = read_config('import','port')
@@ -1306,9 +1329,9 @@ def import_data(**kwargs):
             logging.info("Target database original character set and collation is : "+gicharset+" "+gicollation)
             #logging.info("Source and Target database must have the same character set and collation")
             logging.info("Enforcing character set to higher bits which is UTF8")
-            if re.findall("utf8",getcharset)!=[]:
+            if re.findall("utf8",getcharset,re.IGNORECASE)!=[]:
                 gicharset=getcharset
-            elif re.findall("utf8",gicharset)!=[]:
+            elif re.findall("utf8",gicharset,re.IGNORECASE)!=[]:
                 getcharset=gicharset
             else:
                 getcharset="utf8"
@@ -1376,7 +1399,12 @@ def import_data(**kwargs):
               #create_table_keys()
        
               create_table()
-   
+
+              if rows==():
+                 curimptbl.execute(sqllisttables)
+                 rows = curimptbl.fetchall()
+
+
               for row in rows:
                  if imptables=="all":
                      #check whether regular csv file available
@@ -1551,13 +1579,10 @@ def import_data(**kwargs):
         
    
               if g_tblbinlob=={}:
-                  logging.info(Red+"Unable to retrieve information from database "+impdatabase+Coloff)
-                  continue
+                 logging.info(Red+"Unable to retrieve information from database "+impdatabase+Coloff)
+                 continue
    
-              if listofdata!=[]:
-                 if listofdata[0] not in g_tblbinlob.keys():
-                    g_tblbinlob =  {k.lower(): v for k, v in g_tblbinlob.items()}
-              else:
+              if listofdata==[]:
                  logging.info(Red+"Unable to find any tables, check config file!! "+impdatabase+Coloff)
    
               impconnection.commit()
@@ -1571,6 +1596,9 @@ def import_data(**kwargs):
                  [res.get() for res in multiple_results]
 
            else:
+              if rows==():
+                  logging.info(Red+"Tables do not exist!!, Data need to be imported first!!")
+                  continue
 
               for row in rows:
                  if imptables=="all":
@@ -2739,7 +2767,7 @@ def compare_database(**kwargs):
                try:
                   l_tblinfo=form_orderby(tbl[0],scursor)
                except (Exception,pymysql.Error) as error:
-                  if re.findall("Connection reset by peer",str(error))!=[]:
+                  if re.findall("Connection reset by peer",str(error),re.IGNORECASE)!=[]:
                       sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
                       scursor=sconn.cursor()
                       l_tblinfo=form_orderby(tbl[0],scursor)
@@ -2752,7 +2780,7 @@ def compare_database(**kwargs):
                   srows=scursor.execute(query)
 
                except (Exception,pymysql.Error) as error:
-                  if re.findall("codec|Connection reset by peer",str(error))!=[]:
+                  if re.findall("codec|Connection reset by peer",str(error),re.IGNORECASE)!=[]:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Source DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
                       sconn.close
                       if gecharset in "utf8" and gecharset!="utf8":
@@ -2768,7 +2796,7 @@ def compare_database(**kwargs):
                try:
                   trows=tcursor.execute(query)
                except (Exception,pymysql.Error) as error:
-                  if re.findall("codec|Connection reset by peer",str(error))!=[]:
+                  if re.findall("codec|Connection reset by peer",str(error),re.IGNORECASE)!=[]:
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Target DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
                       tconn.close
                       if gicharset in "utf8" and gicharset!="utf8":
@@ -2981,7 +3009,7 @@ def export_data(**kwargs):
             if (glob.glob(expdatabase+"/*.gz")!=[] and glob.glob(expdatabase+"/*.sql")!=[]):
                 if (forcexp):
                     logging.info("Forced to re-export!, Removing files under "+expdatabase)
-                    l_files2del = glob.glob(expdatabase+"/*.gz") + glob.glob(expdatabase+"/*.sql")
+                    l_files2del = glob.glob(expdatabase+"/*.gz") + glob.glob(expdatabase+"/*.sql") + glob.glob(expdatabase+"/*.flag") + glob.glob(expdatabase+"/*.txt")
                     for l_file2del in l_files2del:
                         os.remove(l_file2del)
                 else:
@@ -3208,7 +3236,7 @@ def main():
        usage()
        sys.exit(2)
 
-    global mode,cfgmode,tblcharset,retdblist,g_removedb,g_tblbinlob,g_renamedb
+    global mode,cfgmode,tblcharset,retdblist,g_removedb,g_tblbinlob,g_renamedb,g_tblnamelow
     global impconnection
     global config,configfile
     global esc,sep1,eol,crlf,quote
@@ -3226,6 +3254,7 @@ def main():
     forcexp=False
     g_removedb=False
     g_tblbinlob={}
+    g_tblnamelow={}
     l_mig=[]
     g_renamedb={}
     #disctionary of character set with key= "import" or "export" and value="character set"
