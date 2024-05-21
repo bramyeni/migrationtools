@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 625 2024-05-21 05:51:10Z bpahlawa $
+# $Id: expimpmysql.py 626 2024-05-21 13:24:04Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-05-21 13:51:10 +0800 (Tue, 21 May 2024) $
-# $Revision: 625 $
+# $Date: 2024-05-21 21:24:04 +0800 (Tue, 21 May 2024) $
+# $Revision: 626 $
 
 import re
 from string import *
@@ -618,6 +618,47 @@ def generate_create_table(tablename):
     except (Exception,pymysql.Error) as error:
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        pass
+
+#procedure to create table
+def get_col_info(dbname):
+    global tblcharset,g_tblbinlob,g_tblnamelow
+    createtable=""
+    l_tblname=[]
+    try:
+       #read the create table script
+       fcrtable = open(dbname+"/"+crtblfilename,"r")
+       #disable foreign key checks
+       for line in fcrtable.readlines():
+          #if the line has ;
+          if re.findall(";$",line)!=[]:
+             #then check if the line has CHARSET=
+             if (line.find("CHARSET=") != -1):
+                 #if yes then capture the character set string using regex
+                 charset=re.findall("CHARSET=([a-zA-Z0-9]+)[ |;|]*",line)
+                 #if charset and also tablename is captured then
+                 if (charset!=[] and l_tblname!=[]):
+                     #store the tablename as a key and charset as value in tblcharset dict
+                     tblcharset[l_tblname[0].lower()]=charset[0]
+             #capture ENGINE=
+             if (line.find("ENGINE=") != -1):
+                 engine=re.findall("ENGINE=([a-zA-Z0-9]+)[ |;|]*",line)
+          else:
+             #this is must be the first line , therefore capture CREATE TABLE command
+             if (line.find("CREATE TABLE") != -1):
+                 #get the tablename by using regex
+                 l_tblname=re.findall("CREATE TABLE `(.*)` ",line)
+                 g_tblnamelow[l_tblname[0].lower()]=l_tblname[0]
+                 g_tblbinlob[l_tblname[0]]={}
+             else:
+                 l_colname=re.findall("^\s*`([a-zA-Z0-9_\-\"]+)` ([A-Za-z0-9\(\)]+) .*[,|\n]",line)
+                 #debugit('l_colname',l_colname)
+                 if l_colname!=[]:
+                    g_tblbinlob[l_tblname[0]][l_colname[0][0]]=l_colname[0][1]
+
+       fcrtable.close()
+
+    except (Exception,pymysql.Error) as error:
+       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
 
 #procedure to create table
 def create_table():
@@ -1691,10 +1732,10 @@ def import_data(**kwargs):
 
 def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdatabase,expca):
     global tblcharset
-    if (tblcharset[tbldata].find("utf8") != -1):
+    if (tblcharset[tblname].find("utf8") != -1):
         charset="utf-8"
         dbcharset="utf8"
-    elif (tblcharset[tbldata].find("latin") != -1):
+    elif (tblcharset[tblname].find("latin") != -1):
         charset="utf-8"
         dbcharset="utf8"
     else:
@@ -1717,18 +1758,42 @@ def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdat
 
        spcursor.execute("show variables like 'secure_file_priv';")
        spooldir=spcursor.fetchone()
+
        if (spooldir[1]!=""):
 
-          expquery="""select * INTO OUTFILE '{0} CHARACTER SET {6}'
-   FIELDS TERMINATED BY '{2}' 
-   OPTIONALLY ENCLOSED BY '{3}' ESCAPED BY '{4}'
-   LINES TERMINATED BY '{5}'
-   FROM {1};
+          l_allcols=""
+          l_cols=""
+          l_loadcols=""
+          l_setcmd="SET "
+          for l_dtype in g_tblbinlob[tblname]:
+             if re.findall(".*(lob|binary).*",g_tblbinlob[tblname][l_dtype])!=[]:
+                l_allcols+="TO_BASE64(`"+l_dtype+"`),"
+                l_setcmd+="`"+l_dtype+"` = UNHEX(@"+l_dtype+"), "
+                l_loadcols+="@"+l_dtype+","
+             else:
+                l_allcols+="`"+l_dtype+"`,"
+                l_loadcols+="`"+l_dtype+"`,"
+
+          if l_setcmd=="SET ":
+             l_setcmd=""
+          else:
+             l_setcmd=l_setcmd[:-2]
+
+          expquery="""select {7} FROM `{0}` INTO OUTFILE '{1}' CHARACTER SET {6} FIELDS TERMINATED BY '{2}' OPTIONALLY ENCLOSED BY '{3}' ESCAPED BY '{4}' LINES TERMINATED BY '{5}';"""
+
+          loadquery="""LOAD DATA LOCAL INFILE '{0}' INTO TABLE `{1}`.`{2}` CHARACTER SET {5} fields terminated by '{6}' OPTIONALLY ENCLOSED BY '{7}' ESCAPED BY '{8}' LINES TERMINATED BY '{9}'
+({3})
+{4};
 """
+          #print(loadquery.format(spooldir[1]+expdatabase+"_"+tblname+".csv",expdatabase,tblname,l_loadcols[:-1],l_setcmd,dbcharset,sep1,quote,esc,eol+crlf))
           logging.info(mprocessid+" Start spooling data on a server from table \033[1;34;40m"+tblname+"\033[1;37;40m into \033[1;34;40m"+spooldir[1]+tblname+".csv")
-          spcursor.execute(expquery.format(spooldir[1]+tblname+".csv",tblname,sep1,quote,esc,eol+crlf))
+          #print(expquery.format(tblname,spooldir[1]+expdatabase+"_"+tblname+".csv",sep1,quote,esc,eol+crlf,dbcharset,l_allcols[:-1]))
+          spcursor.execute(expquery.format(tblname,spooldir[1]+expdatabase+"_"+tblname+".csv",sep1,quote,esc,eol+crlf,dbcharset,l_allcols[:-1]))
           qresult=spcursor.fetchall() 
-          logging.info(mprocessid+" Finish spooling table : "+tblname+" into "+spooldir[1]+tblname+".csv")
+          logging.info(mprocessid+" Finish spooling table : "+Blue+tblname+Coloff+" into "+Blue+spooldir[1]+expdatabase+"_"+tblname+".csv"+Coloff+" at the server "+Cyan+expserver)
+       else:
+          logging.info(mprocessid+" Server variable 'secure_file_priv' was not set, please set this variable to point to a directory on the server!!")
+
 
        etime=datetime.datetime.now()
 
@@ -1742,11 +1807,16 @@ def spool_table_fast(tblname,expuser,exppass,expserver,expport,expcharset,expdat
           logging.error(mprocessid+" \033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
        etime=datetime.datetime.now()
 
-    finally:
        if(spconnection):
           spcursor.close()
           spconnection.close()
        return(mprocessid+" Exporting "+tblname+" is complete with Elapsed time :"+str(etime-stime))
+
+    l_file=open(expdatabase+"/"+tblname+"-srvcmd.txt", 'wt')
+    l_file.write(loadquery.format(spooldir[1]+expdatabase+"_"+tblname+".csv",expdatabase,tblname,l_loadcols[:-1],l_setcmd,dbcharset,sep1,quote,esc,eol+crlf))
+    l_file.close()
+    logging.info(mprocessid+" LOAD DATA command has been written to "+Yellow+"./"+expdatabase+"/"+tblname+"-srvcmd.txt"+Coloff+" at this host ")
+    return(mprocessid+" Exporting "+tblname+" is complete with Elapsed time :"+str(etime-stime))
 
 #procedure to spool data unbuffered to a file in parallel
 def spool_data_unbuffered(tbldata,expuser,exppass,expserver,expport,expcharset,expdatabase,exprowchunk,expca):
@@ -2952,7 +3022,7 @@ def get_params():
 
 #procedure to export data
 def export_data(**kwargs):
-    global exptables,config,configfile,curtblinfo,crtblfile,expmaxrowsperfile,expdatabase,dtnow,expconnection,gecharset,gecollation,resultlist,expoldvars,tblcharset,forcexp,g_dblist,cfgmode
+    global exptables,config,configfile,curtblinfo,crtblfile,expmaxrowsperfile,expdatabase,dtnow,expconnection,gecharset,gecollation,resultlist,expoldvars,tblcharset,forcexp,g_dblist,cfgmode,g_tblbinlob,g_tblnamelow
     #Read configuration from mysqlconfig.ini file
     logging.info("Read configuration from mysqlconfig.ini file")
 
@@ -3138,11 +3208,14 @@ def export_data(**kwargs):
     
            if (crtblfile):
               crtblfile.close()
+
           
            #if this only to generate the script then continue to the next database or return
            if mode=="script":
               if(curtblinfo): curtblinfo.close()
               continue
+
+           get_col_info(expdatabase)
     
            global totalproc
 
