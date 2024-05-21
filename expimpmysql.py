@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 622 2024-05-08 10:20:51Z bpahlawa $
+# $Id: expimpmysql.py 625 2024-05-21 05:51:10Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-05-08 18:20:51 +0800 (Wed, 08 May 2024) $
-# $Revision: 622 $
+# $Date: 2024-05-21 13:51:10 +0800 (Tue, 21 May 2024) $
+# $Revision: 625 $
 
 import re
 from string import *
@@ -268,7 +268,8 @@ def build_python_env(modules):
        print("Checking virtual environment "+virtenv)
        try:
           if (not os.path.isfile(virtenv+"/bin/activate")):
-             shutil.rmtree(virtenv)
+             if os.path.exists(virtenv):
+                shutil.rmtree(virtenv)
           if (os.path.exists(virtenv)):
              allmodules=subprocess.Popen([virtenv+"/bin/pip","freeze"],stdout=subprocess.PIPE).communicate("")[0].decode('utf-8').replace("\n"," ")
              for module in modules:
