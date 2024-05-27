@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 626 2024-05-21 13:24:04Z bpahlawa $
+# $Id: expimpmysql.py 628 2024-05-27 03:38:09Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-05-21 21:24:04 +0800 (Tue, 21 May 2024) $
-# $Revision: 626 $
+# $Date: 2024-05-27 11:38:09 +0800 (Mon, 27 May 2024) $
+# $Revision: 628 $
 
 import re
 from string import *
@@ -108,6 +108,7 @@ WHERE TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 
 "SELECT DATA_TYPE,count(*) TOT FROM information_schema.COLUMNS  WHERE TABLE_SCHEMA NOT IN ('mysql', 'sys', 'information_schema', 'performance_schema') GROUP BY 1"
 "SELECT COUNT(*), TABLE_TYPE FROM information_schema.TABLES GROUP BY table_type"
 "WITH seqlist (a) AS (SELECT CONCAT('%`',TABLE_SCHEMA,'`.`', TABLE_NAME,'`%') a FROM information_schema.TABLES WHERE table_type='SEQUENCE') SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS JOIN seqlist WHERE COLUMN_DEFAULT LIKE seqlist.a"
+"SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS JOIN (SELECT CONCAT('%`',TABLE_SCHEMA,'`.`', TABLE_NAME,'`%') a FROM information_schema.TABLES WHERE table_type='SEQUENCE') seqlist where column_default like seqlist.a"
 "SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.TABLES WHERE TABLE_TYPE='system versioned'"
 "SELECT TABLE_SCHEMA, table_name, column_name, generation_expression FROM INFORMATION_SCHEMA.COLUMNS where generation_expression is not null"
 "SELECT * from information_schema.partitions where partition_name is not null"
@@ -352,6 +353,7 @@ def trap_signal(signum, stack):
                                         password=passwd,
                                         host=server,
                                         port=int(port),
+                                        charset=g_defcharset,
                                         ssl_ca=ca,
                                         database=database)
 
@@ -925,7 +927,7 @@ def insert_data_from_file(tablefile,impuser,imppass,impserver,impport,impcharset
 
 
        curinsdata.execute("SET FOREIGN_KEY_CHECKS=0;")
-       curinsdata.execute("set innodb_lock_wait_timeout="+implocktimeout)
+       set_timeout(curinsdata,"set innodb_lock_wait_timeout="+implocktimeout)
 
        tblcharset[tablename]="utf8"
 
@@ -985,7 +987,7 @@ CHARACTER SET {5} fields terminated by '{6}' OPTIONALLY ENCLOSED BY '{7}' ESCAPE
        #curinsdata.execute("LOAD DATA INFILE '"+dirname+"/"+tablefile+".csv' into table `"+impdatabase+"`.`"+tablename+"` "+l_strcol+l_setcmd+"CHARACTER SET "+tblcharset[tablename]+" fields terminated by '"+sep1+"' OPTIONALLY ENCLOSED BY '"+quote+"' ESCAPED BY '"+esc+"' LINES TERMINATED BY '"+eol+crlf+"';")
 
        if l_nocontent==False:
-          curinsdata.execute("set innodb_lock_wait_timeout="+implocktimeout)
+          set_timeout(curinsdata,"set innodb_lock_wait_timeout="+implocktimeout)
           curinsdata.execute(l_sqlquery.format(dirname+"/"+tablefile+".csv",impdatabase,tablename,l_allcols,l_setcmd,tblcharset[tablename],sep1,quote,esc,eol+crlf))
    
           for warnmsg in insconnection.show_warnings():
@@ -1160,6 +1162,7 @@ def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
                                         host=t_server,
                                         port=int(t_port),
                                         ssl_ca=t_ca,
+                                        charset=g_defcharset,
                                         database=t_database)
 
        dbconnection.close()
@@ -1182,6 +1185,12 @@ def test_connection(t_user,t_pass,t_server,t_port,t_database,t_ca):
           logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(logerr)+" line# : "+str(logerr.__traceback__.tb_lineno))
           return(1)
     
+def set_timeout(thecursor,setquery):
+    thecursor.execute('select @@version')
+    if float(thecursor.fetchall()[0][0][0:3])>=5.6:
+       thecursor.execute(setquery)
+
+
 
 #procedure to import data
 def import_data(**kwargs):
@@ -1475,7 +1484,7 @@ def import_data(**kwargs):
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
                            curimptbl.execute("truncate table `"+row[0]+"`;")
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                           curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                           set_timeout(curimptbl,"set innodb_lock_wait_timeout="+implocktimeout)
                         else:
                            #else then read the rowchunk and resume the insert
                            with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
@@ -1492,7 +1501,7 @@ def import_data(**kwargs):
                                   curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
                                   curimptbl.execute("truncate table `"+row[0]+"`;")
                                   curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                                  curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                                  set_timeout(curimptbl,"set innodb_lock_wait_timeout="+implocktimeout)
        
                         #add this table into listofdata list
                         listofdata.append(row[0])
@@ -1508,7 +1517,7 @@ def import_data(**kwargs):
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
                            curimptbl.execute("truncate table `"+row[0]+"`;")
                            curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                           curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                           set_timeout(curimptbl,"set innodb_lock_wait_timeout="+implocktimeout)
                         #else get the rowchunk and resume
                         else:
                            with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
@@ -1523,7 +1532,7 @@ def import_data(**kwargs):
                                   curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
                                   curimptbl.execute("truncate table `"+row[0]+"`;")
                                   curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                                  curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                                  set_timeout(curimptbl,"set innodb_lock_wait_timeout="+implocktimeout)
        
                         #add table into listofdata list 
                         listofdata.append(row[0])
@@ -1561,7 +1570,7 @@ def import_data(**kwargs):
                                   curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
                                   curimptbl.execute("truncate table `"+row[0]+"`;")
                                   curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                                  curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                                  set_timeout(curimptbl,"set innodb_lock_wait_timeout="+implocktimeout)
                                else:
                                   #open a flagfile and compare content with exprowchunk
                                   with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
@@ -1578,7 +1587,7 @@ def import_data(**kwargs):
                                          curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
                                          curimptbl.execute("truncate table `"+row[0]+"`;")
                                          curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                                         curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                                         set_timeout(curimptbl,"set innodb_lock_wait_timeout="+implocktimeout)
 
                                #add table into listofdata list 
                                listofdata.append(row[0])
@@ -1594,7 +1603,7 @@ def import_data(**kwargs):
                                   curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
                                   curimptbl.execute("truncate table `"+row[0]+"`;")
                                   curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                                  curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                                  set_timeout(curimptbl,"set innodb_lock_wait_timeout="+implocktimeout)
                                else:
                                   with open(impdatabase+"/"+row[0]+".1.csv.gz-tbl.flag", 'rt') as flagfile:
                                      exprowchunk = read_config('export','rowchunk')
@@ -1608,7 +1617,7 @@ def import_data(**kwargs):
                                         curimptbl.execute("SET FOREIGN_KEY_CHECKS=0;")
                                         curimptbl.execute("truncate table `"+row[0]+"`;")
                                         curimptbl.execute("SET FOREIGN_KEY_CHECKS=1;")
-                                        curimptbl.execute("set innodb_lock_wait_timeout="+implocktimeout)
+                                        set_timeout(curimptbl,"set innodb_lock_wait_timeout="+implocktimeout)
        
                                listofdata.append(row[0])
                                for slicetbl in sorted(glob.glob(impdatabase+"/"+row[0]+".*.csv.gz"), key=lambda f: int(re.sub('\D', '', f))):
@@ -2082,7 +2091,7 @@ def gather_database_info(auser,apass,aserver,aport,gecharset,aca,thedir,thedb):
         rno=0
         for rowassess in csv.reader(StringIO(sqldbassess), delimiter=','):
             rno=rno+1
-            logging.info("Executing query "+rowassess[0])
+            logging.info("Executing query "+Yellow+rowassess[0])
             runquery(rowassess[0].format(thedb),aconn,label2=str(rno)+sOI+"QUERY :,"+"\""+rowassess[0]+"\"")
 
         afile.close()
@@ -2165,6 +2174,8 @@ def check_databases(l_dblist,auser,apass,aserver,aport,gecharset,aca):
     if (l_dblist=='all'):
        logging.info("\033[1;36;40mGathering list of all "+l_dbloc+" databases ")
        checkdb='mysql'
+       if gecharset==None:
+           gecharset=g_defcharset
        try:
            aconn = pymysql.connect(user=auser,
                            password=checkpass,
@@ -2317,7 +2328,7 @@ def get_all_info(**kwargs):
            rno=0
            for rowassess in csv.reader(StringIO(sqlassess), delimiter=','):
                rno=rno+1
-               logging.info("Executing query "+rowassess[0])
+               logging.info("Executing query "+Yellow+rowassess[0])
                runquery(rowassess[0],aconn,label2=str(rno)+sOI+"QUERY :,"+"\""+rowassess[0]+"\"",qtype='OTHER_INFORMATION',qseq=rno)
     
            afile.close()
@@ -2393,6 +2404,7 @@ def gather_database_charset(lserver,lport,ldatabase,targetdb,**kwargs):
                                 password=lpass,
                                 host=lserver,
                                 port=int(lport),
+                                charset=g_defcharset,
                                 ssl_ca=lca,
                                 database=ldatabase)
 
@@ -2467,7 +2479,7 @@ def get_all_variables():
                            password=spass,
                            host=expserver,
                            port=int(expport),
-                           charset='utf8',
+                           charset=g_defcharset,
                            ssl_ca=expca,
                            database='mysql')
 
@@ -2475,7 +2487,7 @@ def get_all_variables():
                            password=tpass,
                            host=impserver,
                            port=int(impport),
-                           charset='utf8',
+                           charset=g_defcharset,
                            ssl_ca=impca,
                            database='mysql')
 
@@ -2570,6 +2582,7 @@ def reconnect(ruser,rpass,rserver,rport,rcharset,rca,rdatabase):
         exit(2)
 
 def dblist_expimp(l_impalldb,l_expalldb):
+    global g_renamedb
     l_cmpalldb=[]
     impexcludedb = read_config('import','excludedb')
     for l_dblist in l_expalldb or l_dblist.lower() in list(map(str.lower,l_expalldb)):
@@ -2645,6 +2658,27 @@ def form_orderby(tablename,thecursor):
        return(l_tblinfo)
 
     
+def rename_db(dblist,cmpalldb):
+    global g_renamedb 
+    if dblist!=None and dblist!="":
+        if (len(dblist.split(","))>1):
+            for l_ordb in dblist.split(","):
+               l_mapdb=l_ordb.split(":")
+               l_curdb=l_mapdb[0]
+               l_newdb=l_mapdb[1]
+               if l_curdb in cmpalldb:
+                  g_renamedb[l_curdb]=l_newdb
+                  g_renamedb[l_newdb]=l_curdb
+
+        else:
+            l_mapdb=dblist.split(":")
+            l_curdb=l_mapdb[0]
+            l_newdb=l_mapdb[1]
+            if l_curdb in cmpalldb:
+               if l_curdb in cmpalldb:
+                  g_renamedb[l_curdb]=l_newdb
+                  g_renamedb[l_newdb]=l_curdb
+
 
 def compare_database(**kwargs):
     global cfgmode,retdblist,g_dblist,g_renamedb
@@ -2676,24 +2710,35 @@ def compare_database(**kwargs):
        imppass=' ';
     imppass=decode_password(imppass)
 
-
     l_cmpalldb=[]
 
     if (kwargs.get('insequence',None)!=None):
         expdatabase=kwargs.get('insequence')
         impdatabase=kwargs.get('insequence')
         l_cmpalldb.append(expdatabase)
+        rename_db(imprenamedb,l_cmpalldb)
     else:
         #if list of database is specified then use the parameter rather than config file
         if g_dblist!=None:
            expdatabase=g_dblist
            impdatabase=g_dblist
 
+        rename_db(imprenamedb,expdatabase)
+
+        if len(impdatabase.split(","))>1:
+            for l_dbname in impdatabase.split(",")[:]:
+                if l_dbname in g_renamedb.keys():
+                   impdatabase=impdatabase.replace(l_dbname,g_renamedb[l_dbname])
+        else:
+            impdatabase=impdatabase.replace(impdatabase,g_renamedb[impdatabase])
+       
+
         retdblist={}
 
         cfgmode="import"
 
         retdblist[cfgmode]=[]
+
         check_databases(impdatabase,impuser,imppass,impserver,impport,None,impca)
 
         cfgmode="export"
@@ -2701,32 +2746,20 @@ def compare_database(**kwargs):
         retdblist[cfgmode]=[]
         check_databases(expdatabase,expuser,exppass,expserver,expport,None,expca)
 
-
-        l_impalldb=retdblist["import"]
         l_expalldb=retdblist["export"]
+        l_impalldb=[]
+        for l_dbname in retdblist["import"]:
+            if l_dbname in g_renamedb.keys():
+               l_impalldb.append(g_renamedb[l_dbname])
+            else:
+               l_impalldb.append(l_dbname)
+
 
         if (l_impalldb!=[] and l_expalldb!=[]):
            l_cmpalldb=dblist_expimp(l_impalldb,l_expalldb)
         else:
            logging.info(Red+"No Database exists to compare rowdata!!, exiting...")           
            sys.exit()
-
-    if imprenamedb!=None and imprenamedb!="":
-        if (len(imprenamedb.split(","))>1):
-            for l_ordb in imprenamedb.split(","):
-               l_mapdb=l_ordb.split(":")
-               l_curdb=l_mapdb[0]
-               l_newdb=l_mapdb[1]
-               if l_curdb in l_cmpalldb:
-                  g_renamedb[l_curdb]=l_newdb
-
-        else:
-            l_mapdb=imprenamedb.split(":")
-            l_curdb=l_mapdb[0]
-            l_newdb=l_mapdb[1]
-            if l_curdb in l_cmpalldb:
-               if l_curdb in l_cmpalldb:
-                  g_renamedb[l_curdb]=l_newdb
 
     for expdatabase in l_cmpalldb:
        l_rfhandler=None
@@ -3038,7 +3071,6 @@ def export_data(**kwargs):
     if (exppass==''):
        exppass=' ';
     exppass=decode_password(exppass)
-    exppass = decode_password(read_config('export','password'))
 
     #if list of database is specified then use the parameter rather than config file
     if g_dblist!=None:
@@ -3047,6 +3079,9 @@ def export_data(**kwargs):
     l_expalldb=[]
     retdblist[cfgmode]=[]
     check_databases(expdatabase,expuser,exppass,expserver,expport,None,expca)
+
+    #re-read and decode the password if the password was not set or wrong
+    exppass = decode_password(read_config('export','password'))
 
     l_expalldb=retdblist[cfgmode]
 
@@ -3311,7 +3346,7 @@ def main():
        sys.exit(2)
 
     global mode,cfgmode,tblcharset,retdblist,g_removedb,g_tblbinlob,g_renamedb,g_tblnamelow
-    global impconnection
+    global impconnection,g_defcharset
     global config,configfile
     global esc,sep1,eol,crlf,quote
     global dblist,forcexp,g_dblist
@@ -3323,6 +3358,8 @@ def main():
     logging.basicConfig(level=logging.DEBUG,format="\033[1;37;40m%(asctime)-15s \033[1;32;40m%(message)s \033[1;37;40m",handlers=[fileh,logging.StreamHandler()])
 
     dblist=None
+    #this is to accomodate old version of mysql such as < 5.6
+    g_defcharset='utf8'
     g_dblist=None
     verbose = False
     forcexp=False
