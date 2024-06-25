@@ -1,9 +1,9 @@
 #!/bin/env python3
-# $Id: expimpmysql.py 628 2024-05-27 03:38:09Z bpahlawa $
+# $Id: expimpmysql.py 629 2024-05-30 09:53:52Z bpahlawa $
 # Created 22-NOV-2019
 # $Author: bpahlawa $
-# $Date: 2024-05-27 11:38:09 +0800 (Mon, 27 May 2024) $
-# $Revision: 628 $
+# $Date: 2024-05-30 17:53:52 +0800 (Thu, 30 May 2024) $
+# $Revision: 629 $
 
 import re
 from string import *
@@ -663,10 +663,11 @@ def get_col_info(dbname):
        logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
 
 #procedure to create table
-def create_table():
+def create_table(alltargettables):
     global impconnection,impdatabase,tblcharset,g_tblbinlob,g_tblnamelow
     curcrtable=impconnection.cursor()
     createtable=""
+    l_sqlstmt=""
     crtblfailed=[]
     logging.info("Creating tables from the script")
     try:
@@ -694,14 +695,18 @@ def create_table():
                 #execute create table script
                 #debugit("createtable",createtable)
                 #debugit("line",line)
-                curcrtable.execute(createtable+line)
-                #commmit it
-                impconnection.commit()
+                if tblname[0].lower not in alltargettables and tblname[0] not in alltargettables:
+                   logging.info("\033[1;33;40mExecuting...."+l_sqlstmt)
+                   curcrtable.execute(createtable+line)
+                   #commmit it
+                   impconnection.commit()
+                else:
+                   logging.info("Table "+Yellow+tblname[0]+Coloff+Green+" already exists")
              except (Exception,pymysql.Error) as error:
                 #capture error if foreign key constraint is incorrectl formed
                 if re.findall("Foreign key constraint is incorrectly formed",str(error),re.IGNORECASE)!=[]:
                    crtblfailed.append(createtable+line) 
-                #if table already exist skip
+                #if table already exists skip
                 elif re.findall("already exists",str(error),re.IGNORECASE)!=[]:
                    pass
                 #if error other than the above then
@@ -733,7 +738,7 @@ def create_table():
              #if no previous create table command then
              if createtable=="":
                 #display message
-                logging.info("\033[1;33;40mExecuting...."+line[:-2])
+                l_sqlstmt=line[:-2]
              #forming create table script and store into createtable variable
              createtable+=line
 
@@ -1441,6 +1446,8 @@ def import_data(**kwargs):
            curimptbl.execute(sqllisttables)
            rows = curimptbl.fetchall()
 
+           l_alltargettables = [row[0] for row in rows]
+
            sharedvar=mproc.Value('i',0)
            resultlist=mproc.Manager().list()
            sharedvar.value=0
@@ -1449,7 +1456,7 @@ def import_data(**kwargs):
            if (kwargs.get('frowcountonly',False)==False):
               #create_table_keys()
        
-              create_table()
+              create_table(l_alltargettables)
 
               if rows==():
                  curimptbl.execute(sqllisttables)
@@ -1719,7 +1726,8 @@ def import_data(**kwargs):
                       logging.info("\033[1;33;40m>>>> Setting global variable must require SUPER or SYSTEM_VARIABLES_ADMIN privileges")
                       logging.info("\033[1;33;40m>>>> GRANT SYSTEM_VARIABLES_ADMIN on *.* to "+impuser+";")
                   else:
-                      logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
+                      logging.error(Red+sys._getframe().f_code.co_name+": >>>> Error Trying to execute "+Yellow+impoldvar)
+                      logging.error(Red+sys._getframe().f_code.co_name+": "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
     
         except (Exception,pymysql.Error) as error:
            logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
@@ -2147,7 +2155,7 @@ def create_database(databasename,auser,apass,aserver,aport,gecharset,aca):
                    logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
                    pass
            else:
-               logging.info("Database "+Cyan+databasename+Green+" already exist")
+               logging.info("Database "+Cyan+databasename+Green+" already exists")
 
     except (Exception,pymysql.Error) as error:
         logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error : "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
@@ -2730,7 +2738,8 @@ def compare_database(**kwargs):
                 if l_dbname in g_renamedb.keys():
                    impdatabase=impdatabase.replace(l_dbname,g_renamedb[l_dbname])
         else:
-            impdatabase=impdatabase.replace(impdatabase,g_renamedb[impdatabase])
+            if impdatabase in g_renamedb.keys():
+               impdatabase=impdatabase.replace(impdatabase,g_renamedb[impdatabase])
        
 
         retdblist={}
@@ -2843,42 +2852,78 @@ def compare_database(**kwargs):
        logging.info("User/Host \033[1;34;40m"+impuser+"@"+impserver+"\033[1;37;40m is connected to Target Database : \033[1;34;40m"+impdatabase)
    
        try:
-           alltbls=()
+           alltbls=[]
+           imptbls=[]
+           exptbls=[]
            scursor=sconn.cursor()
-   
-           if (exptables!="all"):
+           tcursor=tconn.cursor()
+           querytbl="show tables"
+  
+           logging.info("Source Database tables")
+           logging.info("- From config file : "+Yellow+exptables)
+           tcursor.execute(querytbl)
+           for exptbl in tcursor.fetchall():
+               alltbls.append(exptbl[0])
+           if (exptables=="all"):
+              logging.info("- From database    : all")
+              exptbls=alltbls
+           else:
               if (len(exptables.split(","))>1):
                   for exptbl in exptables.split(","):
-                      tmptbl = ((exptbl,),)
-                      alltbls+=tmptbl
+                      if exptbl not in alltbls:
+                         logging.info("- Table : "+Blue+exptbl+Coloff+" doesn't exist")
+                      else:
+                         exptbls.append(exptbl)
               else:
-                  alltbls=((exptables,),)
-           else:
-   
-              querytbl="show tables"
-              scursor.execute(querytbl)
-              alltbls=scursor.fetchall()
+                  if exptables not in alltbls:
+                      logging.info("- Table : "+Red+exptables+Coloff+" doesn't exist")
+                  else:
+                      exptbls.append(exptables)
 
-           tcursor=tconn.cursor()
+              exptbls=list(set(alltbls) & set(exptbls)) 
+
+           logging.info("Target Database tables")
+           logging.info("- From config file : "+Yellow+imptables)
+           scursor.execute(querytbl)
+           alltbls=[]
+           for imptbl in scursor.fetchall():
+               alltbls.append(imptbl[0])
+           if (imptables=="all"): 
+              logging.info("- From database    : all")
+              imptbls=alltbls
+           else:
+              if (len(imptables.split(","))>1):
+                  for imptbl in imptables.split(","):
+                      if imptbl not in alltbls:
+                         logging.info("- Table : "+Blue+imptbl+Coloff+" doesn't exist")
+                      else:
+                         imptbl.append(imptbl)
+              else:
+                  if imptables not in alltbls:
+                      logging.info("- Table : "+Red+imptables+Coloff+" doesn't exist")
+                  else:
+                      imptbls.append(imptables)
+              imptbls=list(set(alltbls) & set(imptbls)) 
+
+           alltbls=list(set(exptbls) & set(imptbls))
 
            currtime=None
            l_mismatches={}
-
 
            for tbl in alltbls:
 
                l_tblinfo=[]
                try:
-                  l_tblinfo=form_orderby(tbl[0],scursor)
+                  l_tblinfo=form_orderby(tbl,scursor)
                except (Exception,pymysql.Error) as error:
                   if re.findall("Connection reset by peer",str(error),re.IGNORECASE)!=[]:
                       sconn = reconnect(expuser,exppass,expserver,expport,gecharset,expca,expdatabase)
                       scursor=sconn.cursor()
-                      l_tblinfo=form_orderby(tbl[0],scursor)
+                      l_tblinfo=form_orderby(tbl,scursor)
 
 
-               logging.info("Comparing Table "+tbl[0]+"@"+expdatabase+" with "+tbl[0]+"@"+impdatabase)
-               query="select "+l_tblinfo[0]+" from `"+tbl[0]+"` order by "+l_tblinfo[1]
+               logging.info("Comparing Table "+tbl+"@"+expdatabase+" with "+tbl+"@"+impdatabase)
+               query="select "+l_tblinfo[0]+" from `"+tbl+"` order by "+l_tblinfo[1]
 
                try:
                   srows=scursor.execute(query)
@@ -2914,12 +2959,12 @@ def compare_database(**kwargs):
                       logging.error("\033[1;31;40m"+sys._getframe().f_code.co_name+": Error on Source DB: "+str(error)+" line# : "+str(error.__traceback__.tb_lineno))
    
                if (trows<srows):
-                  logging.info("\033[1;31;40mNumber of rows ("+str(srows)+") source database :"+expdatabase+"@"+expserver+", Table :"+tbl[0]+" is more than target database :"+impdatabase+"@"+impserver+" ("+str(trows)+")")
-                  l_mismatches[tbl[0]]="S"+str(srows)+">T"+str(trows)
+                  logging.info("\033[1;31;40mNumber of rows ("+str(srows)+") source database :"+expdatabase+"@"+expserver+", Table :"+tbl+" is more than target database :"+impdatabase+"@"+impserver+" ("+str(trows)+")")
+                  l_mismatches[tbl]="S"+str(srows)+">T"+str(trows)
                   continue
                elif (trows>srows):
-                  logging.info("\033[1;31;40mNumber of rows ("+str(srows)+") source database :"+expdatabase+"@"+expserver+", Table :"+tbl[0]+" is less than target database :"+impdatabase+"@"+impserver+" ("+str(trows)+")")
-                  l_mismatches[tbl[0]]="S"+str(srows)+"<T"+str(trows)
+                  logging.info("\033[1;31;40mNumber of rows ("+str(srows)+") source database :"+expdatabase+"@"+expserver+", Table :"+tbl+" is less than target database :"+impdatabase+"@"+impserver+" ("+str(trows)+")")
+                  l_mismatches[tbl]="S"+str(srows)+"<T"+str(trows)
                   continue
    
                i=1
@@ -2935,22 +2980,22 @@ def compare_database(**kwargs):
                       print(tdata)
                       l_mism=l_mism+1
                       currtime=str(datetime.datetime.now())
-                      print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCH!! (charset="+gecharset+")"+Coloff,end="\n",flush=True)
-                      logging.info(query+" (select *,row_number() over () rownum from `"+tbl[0]+"`) tbl where tbl.rownum="+str(i))
-                      l_mismatches[tbl[0]]=str(l_mism)
+                      print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+Red+" NOT MATCH!! (charset="+gecharset+")"+Coloff,end="\n",flush=True)
+                      logging.info(query+" (select *,row_number() over () rownum from `"+tbl+"`) tbl where tbl.rownum="+str(i))
+                      l_mismatches[tbl]=str(l_mism)
                    else:
                       currtime=str(datetime.datetime.now())
-                      print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+White+"MATCHED!! (charset="+gecharset+")"+Coloff,end="",flush=True)
+                      print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl+Coloff+Green+" ROW# "+Blue+str(i)+Coloff+" << "+Cyan+impdatabase+" "+White+"MATCHED!! (charset="+gecharset+")"+Coloff,end="",flush=True)
                if (currtime!=None): 
                    print("") 
                else:
                    currtime=str(datetime.datetime.now())
-                   print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl[0]+Coloff+Green+" NO ROWS "+Blue+Coloff+" << "+Cyan+impdatabase+Coloff)
+                   print(White+"\r"+currtime[0:23]+" "+Cyan+expdatabase+Green+" >> "+Yellow+tbl+Coloff+Green+" NO ROWS "+Blue+Coloff+" << "+Cyan+impdatabase+Coloff)
 
-               if tbl[0] in l_mismatches.keys():
-                   logging.info(Green+"Table Data between "+Yellow+expdatabase+"."+tbl[0]+"@"+expserver+Green+" and "+Yellow+impdatabase+"."+tbl[0]+"@"+impserver+" NOT MATCHED by "+l_mismatches[tbl[0]]+" rows")
+               if tbl in l_mismatches.keys():
+                   logging.info(Green+"Table Data between "+Yellow+expdatabase+"."+tbl+"@"+expserver+Green+" and "+Yellow+impdatabase+"."+tbl+"@"+impserver+" NOT MATCHED by "+l_mismatches[tbl]+" rows")
                else:
-                   logging.info(Green+"Table Data between "+Yellow+expdatabase+"."+tbl[0]+"@"+expserver+Green+" and "+Yellow+impdatabase+"."+tbl[0]+"@"+impserver+" MATCHED!! (charset="+gecharset+")")
+                   logging.info(Green+"Table Data between "+Yellow+expdatabase+"."+tbl+"@"+expserver+Green+" and "+Yellow+impdatabase+"."+tbl+"@"+impserver+" MATCHED!! (charset="+gecharset+")")
 
    
            if (l_mismatches!={}):
